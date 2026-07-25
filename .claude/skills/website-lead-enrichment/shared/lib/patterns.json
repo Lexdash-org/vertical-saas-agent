@@ -1,0 +1,36 @@
+{
+  "_comment": [
+    "THE canonical email local-part pattern table. Ordered by real-world B2B frequency.",
+    "Market-agnostic on purpose — do not reorder for one country without evidence.",
+    "",
+    "HARD RULE: dot is the only separator. No underscores, no hyphens, ever.",
+    "",
+    "Each name IS its own formula, in a four-token vocabulary joined by '.' or nothing:",
+    "  first = given name, last = surname, fi = first initial, li = last initial.",
+    "So 'filast' builds <first-initial><last> and 'li.first' builds <last-initial>.<first>.",
+    "Both patterns.ts and permute.py derive their builders from these names, so the table",
+    "cannot drift between the TypeScript and Python halves of the pipeline.",
+    "",
+    "learn-email-patterns.ts also builds its model prompt's allowed-list from this file."
+  ],
+  "patterns": [
+    "first.last",
+    "firstlast",
+    "first",
+    "filast",
+    "fi.last",
+    "first.li",
+    "firstli",
+    "last.first",
+    "lastfirst",
+    "last",
+    "last.fi",
+    "lastfi",
+    "fi.li",
+    "fili",
+    "li.fi",
+    "lifi",
+    "lifirst",
+    "li.first"
+  ]
+}

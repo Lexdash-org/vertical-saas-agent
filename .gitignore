@@ -1,0 +1,29 @@
+# Secrets — real keys live here (never committed). See .env.example.
+.env
+
+# Deps & build
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Working data. Real runs contain named individuals and their email addresses, so
+# nothing the pipeline produces is committed. The shippable, redacted example lives in
+# examples/ and the sample input in fixtures/.
+out/
+# any scratch output dir from a test run (out-clinics/, out-test/, ...)
+out-*/
+ENRICHED-team-emails.csv
+
+# Lead lists are commercial assets and contain business contact data — keep them local.
+data/*.csv
+!fixtures/*.csv
+
+# OS / logs / caches
+.DS_Store
+logs/
+__pycache__/
+*.pyc
+
+# Remotion project deps + render cache
+marketing/remotion-post/node_modules/
+marketing/out/check-*.png
