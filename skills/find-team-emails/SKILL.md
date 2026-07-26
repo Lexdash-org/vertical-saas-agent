@@ -1,158 +1,200 @@
 ---
-name: install-website-lead-enrichment
-description: Use when the website-lead-enrichment skill needs to be installed, updated, or repaired - the user asks to set it up, its folders are missing or incomplete, its dependencies are not installed, or a run fails because credentials were never configured.
+name: find-team-emails
+description: >-
+  Use when someone has a list of company websites and wants the people who work there and
+  their email addresses - "find the staff emails for these clinics", "get me contacts at
+  these companies", "enrich this account list", "scrape team members from these sites",
+  "I have domains but no emails". Handles first-time setup automatically when the tool is
+  not installed or has no API keys yet, then runs the enrichment. NOT for: verifying that
+  an address delivers, scraping one known page, or lists that already have the people.
+license: MIT
+metadata:
+  author: Lexdash-org
+  version: "1.0.0"
 ---
 
-# Install Website Lead Enrichment
+# Find Team Emails
 
-Downloads the `website-lead-enrichment` skill, puts its folders in the right place,
-configures credentials, and proves it works before handing over.
+Turns a CSV of company websites into named staff and their email addresses — for the case
+where those contacts exist in no data vendor, only on the companies' own sites.
 
-This skill only installs. It never enriches anything — once install finishes, the
-`website-lead-enrichment` skill takes over.
+You run this for the user. They do not type commands; you invoke the tools and report what
+came back. Most users are salespeople, not engineers.
 
-## What gets installed
+## Step 1 — Triage before anything else
 
-```text
-<skills-dir>/website-lead-enrichment/
-├── SKILL.md                 # the router
-├── shared/                  # PROVIDERS.md, PIPELINE-STATE.md, lib/
-├── subskills/               # eight stages, each with its own SKILL.md + scripts/
-├── package.json             # the tools are TypeScript — deps live here
-├── tsconfig.json
-├── .env.example             # template for the user's .env
-├── fixtures/                # sample input, used by the health check
-└── node_modules/            # created by step 5
+Setup is a means, not the goal. Check what is already there, then do only what is missing:
+
+```bash
+SKILLS_DIR="${HOME}/.claude/skills"; [ -d "$HOME/.claude" ] || SKILLS_DIR="$HOME/.agents/skills"
+DEST="$SKILLS_DIR/website-lead-enrichment"
+
+[ -f "$DEST/SKILL.md" ]      && echo "pipeline: present"     || echo "pipeline: MISSING"
+[ -d "$DEST/node_modules" ]  && echo "deps: present"         || echo "deps: MISSING"
+[ -f "$HOME/.leadgen/.env" ] && echo "credentials: present"  || echo "credentials: MISSING"
 ```
 
-`<skills-dir>` is the host's global skills directory — `~/.claude/skills/` for Claude Code.
-Install there, not into a project, so the skill is available everywhere.
+| State | What to do |
+|---|---|
+| all three present | **Say nothing about setup.** Go straight to *Running an enrichment*. |
+| pipeline + deps, no credentials | Step 5 only, then run. |
+| anything else missing | Steps 2–6, then run. |
 
-**The last five entries are not optional.** The stages resolve their project root by
-walking up for a `package.json`; without one they throw at startup and nothing runs. In the
-development repo that file sits at the repo root, so it is easy to forget that an installed
-copy needs its own. Steps 4 and 5 put it there.
+After the first day the common case is "all present". Landing there must cost the user
+nothing — no setup narration, no instructions, just the result they asked for.
 
-## Steps
+## Step 2 — Node.js
 
-### 1. Check what is already there
+Check first. An npm failure three steps later is a wall of text nobody can act on.
 
-If `<skills-dir>/website-lead-enrichment/SKILL.md` exists, this is an update or a repair,
-not a fresh install. Tell the user which version is present (read `version.txt` if it
-exists) and confirm before overwriting. Never silently replace a working install.
+```bash
+node --version 2>/dev/null || echo "not installed"
+```
 
-### 2. Download the release
+Node 20 or newer is required. If it is missing or older, **ask before installing anything**
+— this is the only step that touches the machine outside this tool's own folders:
+
+| Platform | Command |
+|---|---|
+| macOS | `brew install node` |
+| Windows | `winget install OpenJS.NodeJS.LTS` |
+| Debian/Ubuntu | `sudo apt install nodejs` |
+| Fedora | `sudo dnf install nodejs` |
+
+Never run a `sudo` command without showing it and getting a yes. If the package manager is
+absent, or the user declines, point them at <https://nodejs.org> and stop — a stop with a
+clear next step is a fine outcome; an unexplained npm crash is not.
+
+## Step 3 — Find or fetch the pipeline
+
+It may already be on disk: the skills CLI can place the whole repository, or the user may
+have cloned it. Look before downloading.
+
+```bash
+for c in "$SKILLS_DIR/website-lead-enrichment" ./skills/website-lead-enrichment; do
+  [ -f "$c/SKILL.md" ] && SRC_SKILL="$c" && break
+done
+```
+
+**If found**, use it as the source for step 4 and skip the download.
+
+**If not found**, fetch the tagged release:
 
 ```bash
 REPO=Lexdash-org/vertical-saas-agent
 TAG=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4)
 curl -fsSL -o /tmp/wle.tar.gz "https://github.com/$REPO/archive/refs/tags/$TAG.tar.gz"
-```
-
-Fail loudly if either request 404s — that means no release is published yet, and the user
-should install from a clone instead (step 2b). Do not fall back to cloning `main` silently;
-an untagged tree is not a release.
-
-**2b. From a clone**, when no release exists or the user already has the repo: copy
-`.claude/skills/website-lead-enrichment/` out of the checkout into `<skills-dir>/`.
-
-### 3. Verify the checksum
-
-```bash
-curl -fsSL -o /tmp/wle.sha256 "https://github.com/$REPO/releases/download/$TAG/checksums.txt"
-shasum -a 256 -c /tmp/wle.sha256 --ignore-missing
-```
-
-If the checksum file is absent, say so plainly and ask the user whether to continue. Do not
-present an unverified download as verified.
-
-### 4. Assemble the install
-
-The tarball contains the whole repo. Take the skill folder **plus the four files it needs
-to run**, which live at the repo root:
-
-```bash
+curl -fsSL -o /tmp/wle.sha256 "https://github.com/$REPO/releases/download/$TAG/checksums.txt" \
+  && shasum -a 256 -c /tmp/wle.sha256 --ignore-missing
 tar -xzf /tmp/wle.tar.gz -C /tmp
-SRC=$(echo /tmp/vertical-saas-agent-*)
-DEST="$SKILLS_DIR/website-lead-enrichment"
+```
+
+Fail loudly if the release request 404s — that means no release is published and the user
+should install from a clone instead. Do not silently fall back to the default branch; an
+untagged tree is not a release. If the checksum file is absent, say so plainly and ask
+whether to continue — never present an unverified download as verified.
+
+## Step 4 — Assemble and install
+
+One list drives both the copy and the check, so they cannot drift apart:
+
+```bash
+SRC=$(echo /tmp/vertical-saas-agent-*)     # or the checkout found in step 3
+NEEDS="package.json tsconfig.json .env.example examples/input"
 
 mkdir -p "$DEST"
-cp -R "$SRC/.claude/skills/website-lead-enrichment/." "$DEST/"
-cp "$SRC/package.json" "$SRC/tsconfig.json" "$SRC/.env.example" "$DEST/"
-cp -R "$SRC/fixtures" "$DEST/"
-```
-
-Then verify, and stop if anything is missing — a partial install is worse than none:
-
-```bash
-for f in SKILL.md package.json tsconfig.json .env.example \
-         shared/lib/paths.ts fixtures/companies.example.csv; do
-  [ -e "$DEST/$f" ] || echo "MISSING: $f"
+cp -R "$SRC/skills/website-lead-enrichment/." "$DEST/"
+for item in $NEEDS; do
+  mkdir -p "$DEST/$(dirname "$item")"
+  cp -R "$SRC/$item" "$DEST/$item"
 done
-ls "$DEST"/subskills/*/SKILL.md | wc -l   # must be 8
-```
 
-If anything is missing, remove `$DEST` entirely and report the failure. Do not leave a
-half-installed skill in place.
+fail=0
+for item in SKILL.md shared/lib/paths.ts $NEEDS; do
+  [ -e "$DEST/$item" ] || { echo "MISSING: $item"; fail=1; }
+done
+[ "$(ls "$DEST"/subskills/*/SKILL.md 2>/dev/null | wc -l)" -eq 8 ] || { echo "MISSING: subskills"; fail=1; }
+[ "$fail" -eq 0 ] || { rm -rf "$DEST"; echo "install aborted"; exit 1; }
 
-### 5. Install the Node dependencies
-
-The tools are TypeScript, run through `tsx`. Install inside the skill folder — the
-`package.json` copied in step 4 is what makes the skill self-contained:
-
-```bash
 cd "$DEST" && npm install
 ```
 
-`node_modules/` must end up inside `$DEST`. The stages find their root by walking up for a
-`package.json`, so they will now resolve to `$DEST` and write their output to `$DEST/out/`.
+A partial install is worse than none: on any missing entry remove `$DEST` entirely and
+report, rather than leaving a folder that half works.
 
-Set `LEADGEN_OUT_DIR` if the user would rather results landed somewhere else — a project
-folder, say — and `LEADGEN_ROOT` only if you deliberately point the skill at a different
-checkout.
+## Step 5 — Credentials
 
-### 6. Configure credentials
-
-Copy `.env.example` to `.env` and walk the user through it. Read
-`website-lead-enrichment/shared/PROVIDERS.md` for what each key is for.
-
-Required:
-
-- `FIRECRAWL_API_KEY` — site mapping
-- `ZYTE_API_KEY` — page fetching
-- `LLM_API_KEY` (+ `LLM_BASE_URL` unless using OpenAI) and the two model names — any
-  OpenAI-compatible provider. The Azure preset also works.
-
-**Codex is optional.** If the user has no Codex CLI, say the open-web discovery stage will
-be skipped and move on. Do not ask them to install it, and never write a key into
-`OPENAI_API_KEY` — that variable must stay unset.
-
-Never print a key back to the user, never echo `.env`, and never commit it.
-
-### 7. Health check
-
-Prove the install works before saying it is done. Run the two keyless stages against the
-bundled fixture and a scratch output directory, so nothing real is touched:
+One file, in the user's home directory — not in a project, not inside the skill, so the
+same keys work everywhere and survive a reinstall:
 
 ```bash
-cd "$DEST" && LEADGEN_OUT_DIR=/tmp/wle-check \
-  npx tsx subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
-  --input fixtures/companies.example.csv
+mkdir -p ~/.leadgen && cp "$DEST/.env.example" ~/.leadgen/.env
 ```
 
-This uses only DNS — no credits, no keys, no network beyond MX lookups. It proves the
-files landed, the dependencies resolve, and the root/output paths work. A provider
-breakdown means the install is sound.
+Walk them through the four required values:
 
-Then confirm the credentialed providers respond, one cheap call each, and report which are
-live and which are missing. Do not run a full enrichment as a health check.
+- `LEADGEN_FIRECRAWL_API_KEY` — site mapping (firecrawl.com)
+- `LEADGEN_ZYTE_API_KEY` — page fetching (zyte.com)
+- `LEADGEN_LLM_API_KEY` and `LEADGEN_LLM_MODEL_REASONING` — any OpenAI-compatible endpoint.
+  Add `LEADGEN_LLM_BASE_URL` for anything other than OpenAI; `.env.example` lists base URLs
+  for OpenRouter, Together, Groq, Ollama and Azure.
 
-### 8. Hand over
+Tell them why the names look like that, because it is what they are most likely to worry
+about:
 
-Report: install location, version/tag, which providers are configured, whether Codex is
-present, and the one-line way to start —
+> Every variable starts with `LEADGEN_` so it cannot clash with another tool. Keep
+> `OPENAI_API_KEY` unset — if it is set, Codex bills that key instead of using the ChatGPT
+> subscription you already pay for. The same goes for `ANTHROPIC_API_KEY` and Claude Code.
+> This tool reads neither.
 
-> "Enrich this list of company websites: `<path to csv>`"
+If one of those is already exported in their shell, say so — it is costing them money
+regardless of this install.
+
+**Codex is optional.** Without it, open-web discovery is skipped and everything else runs.
+Do not ask them to install it. It authenticates with `codex login`, not a key.
+
+Never print a key back, never echo the file, never commit it.
+
+## Step 6 — Prove it works
+
+Both credential-free stages, against the bundled fixture and a scratch output directory, so
+nothing real is touched:
+
+```bash
+cd "$DEST"
+LEADGEN_OUT_DIR=/tmp/wle-check npx tsx \
+  subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+  --input examples/input/companies.example.csv
+LEADGEN_OUT_DIR=/tmp/wle-check npx tsx \
+  subskills/email-permutation/scripts/apply-permutation.ts
+```
+
+The first is DNS only — it proves the files landed, dependencies resolve and the network
+works. The second is pure string generation — it proves the output layer produces the three
+deliverable files. Checking only the first leaves untested the half that makes what the user
+actually receives.
+
+Then one cheap call per configured provider, and report which are live. Do not run a full
+enrichment as a health check.
+
+## Running an enrichment
+
+Read `$DEST/SKILL.md` and follow it. That skill owns the pipeline; this one owns getting to
+the point where it can run.
+
+If the user asked for emails and setup has just finished, **run it now** — they asked for
+leads, not for an installation. Only when they explicitly asked to "set up" or "install"
+should you stop and hand over with:
+
+> Ready. To start: *"Enrich this list of company websites: `<path to csv>`"*
+
+Either way, tell them once where things live:
+
+- credentials: `~/.leadgen/.env` — edit that file to change keys
+- results: `out/` **in whatever folder they run from**
+
+Do not explain the internal skill layout, the subskills, or what "routing" means. None of it
+helps someone who wants a list of emails.
 
 ## Rules
 
@@ -160,4 +202,7 @@ present, and the one-line way to start —
 - Never present an unverified download as verified.
 - Never leave a partial extract in place.
 - Never print, echo, or commit a credential.
+- Never write a key into `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`, and never suggest putting
+  any key in a shell profile — this tool reads one file and nothing else.
+- Never run a system-level install without showing the command and getting a yes.
 - A missing Codex is not a failed install.

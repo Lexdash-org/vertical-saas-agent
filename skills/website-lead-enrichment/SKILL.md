@@ -10,6 +10,10 @@ description: >-
   "enrich this account list", "predict emails for people we found", "find the emails
   we're missing"). NOT for: verifying a predicted address delivers (SMTP/catch-all is
   downstream); scraping a single known page; lists that already have the people.
+license: MIT
+metadata:
+  author: Lexdash-org
+  version: "1.0.0"
 ---
 
 # Website → Team + Emails
@@ -33,6 +37,19 @@ read the subskill before running that stage.
    and resume, and the rule that **no two master-writing stages run at once**.
 3. Check the keys and report every missing one together, not one stage at a time.
 4. Confirm you have the input CSV path and which column holds the website.
+
+### No credentials yet is a setup state, not a failure
+
+If `~/.leadgen/.env` is absent, or the required keys are empty, **offer to set them up** —
+do not start a run that will throw, and do not hand back a bare
+`LEADGEN_ZYTE_API_KEY is not set`. That message is correct for a developer and a dead end
+for a salesperson, who did not choose the variable name and cannot act on it.
+
+> You haven't added your API keys yet — want me to walk through it? Takes a couple of
+> minutes, then I'll run this list.
+
+Then follow the `find-team-emails` skill, which owns setup, and come back and run. A user
+who asked for leads should never be left holding an error instead.
 
 ## Confirm once, then run
 
@@ -122,24 +139,35 @@ close the loop: discover → re-learn → re-predict.
 - Nothing found → check the stage's credential before concluding the sites are empty. A
   missing key looks exactly like an empty site.
 - Stage 4 skipping companies you expected → look for `error` records in
-  `business-email-ledger.jsonl` and re-run stage 3 for those.
+  `.work/ledgers/business-email-ledger.jsonl` and re-run stage 3 for those.
 - Two stages accidentally run at once → the master may be clobbered. Re-run them in order.
+- A company was skipped at stage 2 as unreachable → that is deliberate, not a failure.
+  Stage 1 confirmed the host answers nothing. Report it as skipped; it can still yield a
+  business inbox at stage 3.
 
 ## What you hand back
 
-Four files:
+Three files. `out/` deliberately contains nothing else except the `README.txt` stage 8
+writes, so you can name these as "the output" without qualification. Everything the
+pipeline needs to resume — including the master — lives in `out/.work/`, which the user
+never opens:
 
-- `out/team-master.csv` — every person, every column.
-- `out/verified-real.csv` — people with a real personal address (`known`, `web-found`).
+- `out/ready-to-send.csv` — people with a real address (`known`, `web-found`).
   **Safe to send.**
 - `out/company-inboxes.csv` — one row per company with a published inbox (`info@`,
   `reception@`) or a related-domain contact. Real addresses, **safe to send**, but they
   reach the business rather than a named person.
-- `out/predicted-unverified.csv` — basis `learned:` or `default:`. **Must go through an
+- `out/verify-before-sending.csv` — basis `learned:` or `default:`. **Must go through an
   email verifier before sending.**
 
+Both person files use the same columns, and `email` is the address to send to.
+
+**Report from `out/.work/run-summary.json`.** Stage 8 writes it with every count you need
+— per tier, per basis, how many carry a checkable `proof` link, and how many people ended
+with no address at all. Read that file rather than counting rows or re-reading the console.
+
 For a list of small businesses, `company-inboxes.csv` is usually far larger than
-`verified-real.csv` — most clinics publish a front-desk address and no personal ones.
+`ready-to-send.csv` — most clinics publish a front-desk address and no personal ones.
 Never report only the personal-email count: that understates what was actually found, and
 those inboxes are the bulk of the usable contacts. "Any email is a lead."
 

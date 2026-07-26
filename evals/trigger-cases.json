@@ -1,0 +1,116 @@
+{
+  "$comment": [
+    "Which requests should activate a skill, and which should not. An agent sees only the",
+    "name and description of each skill when it decides, so these cases test the",
+    "descriptions, not the skill bodies. Run them by pasting `request` into a fresh session",
+    "with the skills installed and recording what it reached for.",
+    "",
+    "`expect` is the skill that should activate, or null for none. The near-misses matter",
+    "more than the hits: a skill that fires on everything is worse than one that fires on",
+    "nothing, because it spends real money."
+  ],
+  "cases": [
+    {
+      "id": "batch-plain-language",
+      "request": "I've got a list of medical clinic websites and I need the staff names and their email addresses so I can put them in my sequencer. The list is examples/input/companies.example.csv",
+      "expect": "website-lead-enrichment",
+      "why": "The canonical request. A non-technical SDR describing the job in their own words, with no jargon from the description."
+    },
+    {
+      "id": "batch-jargon",
+      "request": "Enrich this account list \u2014 I need contacts at each of these companies.",
+      "expect": "website-lead-enrichment",
+      "why": "Sales vocabulary rather than technical vocabulary."
+    },
+    {
+      "id": "scrape-team-members",
+      "request": "Scrape the team members off these 40 company sites.",
+      "expect": "website-lead-enrichment",
+      "why": "People extraction alone is still the pipeline; the router decides how far to run."
+    },
+    {
+      "id": "missing-emails-only",
+      "request": "I already have the people, I just can't find the emails we're missing.",
+      "expect": "website-lead-enrichment",
+      "why": "Should activate and route to the later stages, not restart from page ranking."
+    },
+    {
+      "id": "predict-from-names",
+      "request": "I have first names, last names and domains but no emails. Predict the addresses.",
+      "expect": "website-lead-enrichment",
+      "why": "Reaches email-permutation, but through the parent \u2014 nested subskills are not independently discoverable, and running the permuter alone would skip the domain-priority rules."
+    },
+    {
+      "id": "single-person",
+      "request": "What's the likely work email for Jane Smith at acme.com.au?",
+      "expect": "website-lead-enrichment",
+      "why": "The inline single-person path. Must present ranked candidates and say plainly that none is verified."
+    },
+    {
+      "id": "install",
+      "request": "Install the website lead enrichment skill for me.",
+      "expect": "find-team-emails",
+      "why": "Install must win over the enrichment skill on this phrasing."
+    },
+    {
+      "id": "broken-install",
+      "request": "The lead enrichment thing throws an error about not finding package.json when I run it.",
+      "expect": "find-team-emails",
+      "why": "A repair, not a run. The symptom of an incomplete install is the described trigger."
+    },
+    {
+      "id": "no-credentials",
+      "request": "I want to try the enrichment pipeline but I haven't set up any API keys yet.",
+      "expect": "find-team-emails",
+      "why": "Credential setup belongs to install, and it must not start a run that will fail at the first stage."
+    },
+    {
+      "id": "near-miss-verification",
+      "request": "Check whether these 500 email addresses actually deliver.",
+      "expect": null,
+      "why": "SMTP and catch-all verification is explicitly downstream and out of scope. Activating here would imply a capability the project does not have."
+    },
+    {
+      "id": "near-miss-single-page",
+      "request": "Grab the contact details off https://example.com/contact",
+      "expect": null,
+      "why": "One known page needs a fetch, not an eight-stage pipeline over a company list."
+    },
+    {
+      "id": "near-miss-list-already-complete",
+      "request": "Dedupe this lead list and normalise the company names.",
+      "expect": null,
+      "why": "List hygiene is upstream. The description names it as a non-goal."
+    },
+    {
+      "id": "near-miss-personal-emails",
+      "request": "Find personal Gmail addresses for these people.",
+      "expect": null,
+      "why": "The pipeline sources business addresses from company websites. Should decline rather than repurpose the stages."
+    },
+    {
+      "id": "near-miss-upload",
+      "request": "Push my enriched CSV into Smartlead.",
+      "expect": null,
+      "why": "Sending-platform integration is downstream and named as a non-goal."
+    },
+    {
+      "id": "near-miss-linkedin",
+      "request": "Pull the employee list for these companies off LinkedIn.",
+      "expect": null,
+      "why": "A named third-party source, not the companies' own sites. The pipeline has no path to it and must not improvise one."
+    },
+    {
+      "id": "already-installed-just-run",
+      "request": "Find the staff emails for these 40 clinic websites.",
+      "expect": "find-team-emails",
+      "why": "After install BOTH skills match a request for team emails. find-team-emails triages first: everything present means it skips setup entirely and runs. A user must never be told to set up something they already set up."
+    },
+    {
+      "id": "installed-but-no-keys",
+      "request": "Enrich this list of company websites \u2014 I set the tool up last week but never added my API keys.",
+      "expect": "find-team-emails",
+      "why": "Credentials missing is a setup state, not a run failure. It configures then runs, rather than throwing a variable name at a salesperson."
+    }
+  ]
+}
