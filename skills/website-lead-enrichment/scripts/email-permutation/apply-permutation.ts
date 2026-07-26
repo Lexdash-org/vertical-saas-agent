@@ -35,7 +35,17 @@ const IN_CSV = workPath('permute-input.csv');
 const WIDE_CSV = workPath('permute-wide.csv');
 const LONG_CSV = workPath('permute-long.csv');
 const MAX = 18;
-const EMBED = 10; // how many candidates to embed in the master
+/**
+ * Ship every candidate that was generated, rather than the first ten of them.
+ *
+ * These cost nothing — permutation is string generation against a confirmed mail domain, no
+ * API call and no credit — so the eight this used to drop were computed and then thrown away
+ * before the CSV, with nothing in the output saying a cap had been applied. The person
+ * receiving the file is going to put it through a verifier, and a verifier cannot test a
+ * candidate it was never given. Ten of eighteen also quietly contradicted the docs and the
+ * CI invariant, both of which state the pipeline produces eighteen.
+ */
+const EMBED = MAX;
 
 /**
  * The send-facing schema, identical for both person files so one saved column mapping in

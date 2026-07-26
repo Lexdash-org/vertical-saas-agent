@@ -111,6 +111,12 @@ status, source, proof, business_email, all_business_emails, all_predicted_emails
 master's `email` column, which holds only scraped addresses and is empty for most people;
 anyone mapping a column called "email" from the old wide files sent an empty campaign.
 
+`all_predicted_emails` carries **every** candidate that was generated, semicolon-separated
+and in rank order — 18 for a two-token name, 16 when the initials collide, 1 for a single
+token. It used to carry the first ten, which meant a verifier could not test candidates the
+pipeline had already produced. Generating them is free (string work against a confirmed mail
+domain, no API call), so there is nothing to save by truncating.
+
 `company-inboxes.csv` is built from the stage 3 and 4 **ledgers**, not from master rows,
 because the master only ever gets a row when a person is found. A clinic that publishes
 `info@clinic.com.au` and names no staff has no master row, and on a small-business list
