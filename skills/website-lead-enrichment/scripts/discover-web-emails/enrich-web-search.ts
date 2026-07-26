@@ -300,15 +300,38 @@ async function main(): Promise<void> {
     targets.push({ rowId: i, domain: dom, name, title, company: r[co] || '', website: r[we] || '', ctx, score });
   });
   targets.sort((a, b) => b.score - a.score);
-  const batch = targets.slice(0, LIMIT === Infinity ? targets.length : LIMIT);
+
+  // How many to search is the user's decision, never a default. Every other stage may
+  // safely default to "all" — time is the only thing they spend. This is the one whose
+  // budget cannot be bought back, so an unbounded run is refused rather than sized for
+  // them. Reporting the count here is the point: it is the number they need to choose.
+  if (LIMIT === Infinity) {
+    die(
+      `--limit is required. ${targets.length} ${targets.length === 1 ? 'person has' : 'people have'} ` +
+      'no email published on their own site.\n' +
+      '  Decide how many of them to search and pass --limit N. They are ranked by\n' +
+      '  findability, so titled staff come first and a small N is not a random sample.\n' +
+      "  A search's share of the weekly quota depends on your ChatGPT plan and is not\n" +
+      '  published, so start small and re-check codex-usage-check.ts before going bigger.',
+    );
+  }
+  const batch = targets.slice(0, LIMIT);
   console.log(`${targets.length} people without a scraped email · running ${batch.length} this pass (concurrency ${CONCURRENCY}, model ${MODEL})`);
 
-  // Gate on the weekly limit before spending anything.
+  // Gate on the weekly limit before spending anything. Fail CLOSED: how much of the weekly
+  // quota one search costs differs per plan tier and is not published, so a run we cannot
+  // meter is a run against an unknown rate. Stopping costs a rerun; guessing costs the week.
   const startPct = await weeklyUsedPercent();
-  if (startPct !== null) {
-    console.log(`Codex weekly usage: ${startPct}% (throttle stops at ${STOP_AT}%)`);
-    if (startPct >= STOP_AT) { console.error(`already ≥ ${STOP_AT}% this window — nothing to run, resume after the weekly reset.`); return; }
+  if (startPct === null) {
+    die(
+      'cannot read Codex weekly usage — refusing to run unmetered.\n' +
+      "  A search's share of the weekly limit depends on your ChatGPT plan and is not\n" +
+      '  published, so running without the meter risks exhausting the window in one pass.\n' +
+      '  Check Codex is working:  npx tsx scripts/discover-web-emails/codex-usage-check.ts',
+    );
   }
+  console.log(`Codex weekly usage: ${startPct}% (throttle stops at ${STOP_AT}%)`);
+  if (startPct >= STOP_AT) { console.error(`already ≥ ${STOP_AT}% this window — nothing to run, resume after the weekly reset.`); return; }
 
   const limit = pLimit(CONCURRENCY);
   let done2 = 0, hits = 0, stopped = false, lastUsageAt = 0;
@@ -327,7 +350,10 @@ async function main(): Promise<void> {
           if (!stopped && done2 - lastUsageAt >= 40) {
             lastUsageAt = done2;
             const u = await weeklyUsedPercent();
-            if (u !== null && u >= STOP_AT) { stopped = true; console.error(`\n⏸ weekly usage ${u}% ≥ ${STOP_AT}% — stopping cleanly at ${done2} done, ${hits} found. Resume after reset.`); }
+            // Losing the meter mid-run fails closed too — the rest is ledgered, so a resume
+            // costs nothing, while continuing blind could burn the remaining week.
+            if (u === null) { stopped = true; console.error(`\n⏸ lost the Codex usage meter at ${done2} done, ${hits} found — stopping rather than running unmetered. Re-run to resume.`); }
+            else if (u >= STOP_AT) { stopped = true; console.error(`\n⏸ weekly usage ${u}% ≥ ${STOP_AT}% — stopping cleanly at ${done2} done, ${hits} found. Resume after reset.`); }
           }
         } catch (err) {
           if (err instanceof RateLimit) {

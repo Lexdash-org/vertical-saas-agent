@@ -79,12 +79,28 @@ strong instruction, not a guarantee.
 Codex runs on a subscription with a **weekly** limit and no headless `usage` command. The
 runner reads `account/rateLimits/read` over the app-server, paces down as the weekly
 percentage climbs, and stops cleanly at `--stop-at-percent` (default 90), resuming from
-the ledger after the window resets. It re-checks every 40 completions. Roughly 1% per 16
-searches.
+the ledger after the window resets. It re-checks every 40 completions.
 
-If the usage probe fails — spawn error, 20s timeout, unexpected shape — it returns null
-and **the throttle silently does nothing**. A broken app-server disables the cap rather
-than halting the run, so run `scripts/codex-usage-check.ts` before a large batch.
+**How much one search costs is not knowable, so no document here states a rate.** The
+per-search share of the weekly limit differs across the $20, $100 and $200 plans and is not
+published by OpenAI. An earlier version of this file asserted "1% per 16 searches"; it was
+wrong by more than an order of magnitude, and anyone sizing a batch from it would have run
+out mid-run. A CI invariant now rejects any such claim in any document.
+
+Measurements live in exactly one place — the observations table in
+[TESTING.md](../../../TESTING.md). Record what a run actually consumed there, naming the
+plan tier. Never promote a measurement into a rate, here or anywhere else: one tier's
+number tells you nothing about another's.
+
+Treat the live percentage as the only trustworthy number, and let the user choose the batch
+size against it. `--limit N` carries that choice through, ranked so titled staff go first,
+and **the stage refuses to run without it** — so an unbounded run is impossible rather than
+merely discouraged.
+
+If the usage probe fails — spawn error, 20s timeout, unexpected shape — the run **stops and
+reports**. It used to return null and let the batch continue with the throttle silently
+disabled, which is the worst outcome when the true cost per search is unknown: an uncapped
+run against an unknown rate. Failing closed can only cost a rerun.
 
 ## Mechanics that bite
 

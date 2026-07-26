@@ -55,11 +55,11 @@ check('matching initials dedupe', () => {
   return `${out.length} candidates after collapse`;
 });
 
-const walk = (dir: string, out: string[] = []): string[] => {
+const walk = (dir: string, ext = '.ts', out: string[] = []): string[] => {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) walk(p, out);
-    else if (e.name.endsWith('.ts')) out.push(p);
+    if (e.isDirectory()) walk(p, ext, out);
+    else if (e.name.endsWith(ext)) out.push(p);
   }
   return out;
 };
@@ -250,6 +250,27 @@ check('example CSV contains no predictions', () => {
   const mismatched = rows.filter((r) => at(r, 'best_email') !== at(r, 'email'));
   if (mismatched.length) throw new Error(`${mismatched.length} row(s) have best_email !== email`);
   return `${rows.length} rows, all basis=known, all same-domain`;
+});
+
+/**
+ * No document may state a Codex per-search quota rate. A search's share of the weekly limit
+ * differs across the $20/$100/$200 plans and OpenAI publishes none of them, so any such
+ * figure is a guess that reads as a fact. The docs once claimed "1% per 16 searches" and
+ * were wrong by more than an order of magnitude; a user sizing a batch from it ran out
+ * mid-run. Report the live percentage instead, and let the user pick the batch size.
+ */
+check('no invented Codex quota rate', () => {
+  const rate = /\d+\s*%[^.]{0,40}\bper\b[^.]{0,30}\bsearch(es)?\b/i;
+  // Whitespace is collapsed before matching, so a line break cannot hide the claim — a
+  // paragraph wrapping "1% per 16 / searches" asserts exactly what one line would, and a
+  // per-line check waves it through. Quoted spans are dropped first: citing the discredited
+  // figure to warn against it is the opposite of asserting it, and the docs do exactly that.
+  const docs = [...walk('skills', '.md'), 'README.md', 'TESTING.md'];
+  const bad = docs.filter((f) =>
+    rate.test(fs.readFileSync(f, 'utf8').replace(/"[^"]*"/g, '').replace(/\s+/g, ' ')),
+  );
+  if (bad.length) throw new Error(`quota rate stated as fact in ${bad.join(', ')}`);
+  return `${docs.length} docs carry no invented per-search rate`;
 });
 
 if (failures.length) {

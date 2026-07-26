@@ -147,9 +147,16 @@ Give your agent a CSV with a website column and ask in plain language:
 > Enrich this list of clinic websites — I need staff names and email addresses.
 > `examples/input/companies.example.csv`
 
-It confirms the plan once (how many companies, which stages, what it will spend), then
-runs stages 1–4 and 6–8 straight through. It pauses before stage 5 only, because that one
-is optional and spends a weekly Codex quota.
+It confirms the plan once (how many companies, which stages, what it will spend), then runs
+stages 1–4 and 6–8 straight through.
+
+It stops once, between the two — before stage 5, the optional Codex pass that searches the
+open web for people whose own site published no email. That stage spends a weekly quota you
+cannot top up with money, so it asks twice: whether to use Codex at all, and if so **how
+many people to search**. It never picks that number for you and never defaults to the whole
+list. How much of the week one search costs depends on your ChatGPT plan ($20 / $100 / $200)
+and is not published by OpenAI, so it reports your live usage percentage and lets you size
+the batch against it.
 
 You get three files, and `out/` contains nothing else but a `README.txt` explaining them:
 

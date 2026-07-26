@@ -70,16 +70,48 @@ Do not invent a completion time — no measured per-company rate exists. Say ins
 you will report progress as stages finish, and if pressed, run the first few companies and
 extrapolate from what they actually took.
 
-Then run stages 1–4, then 6–8, without stopping. Stop only for a genuine failure.
+Then run stages 1–4 without stopping. Stop only for a genuine failure.
 
-**The one exception is stage 5.** It is optional and spends a weekly Codex quota, so ask
-before running it — or skip it outright when Codex isn't installed.
+**Stage 5 sits between scraping and prediction, and it is the one place you stop.** Codex
+should only ever search for people whose own website gave up no email, so it runs after
+stage 4 has finished collecting and before stage 6 starts predicting. Once the user has
+answered, run 6–8 without stopping.
+
+## Stage 5 — ask twice, and let the user pick the number
+
+**Never start stage 5 unprompted, and never choose the batch size yourself.** This is the
+only stage that spends a quota the user cannot top up with money, and a large list will
+exhaust it in one run.
+
+First read the live usage — `npm run usage`, or
+`scripts/discover-web-emails/codex-usage-check.ts`. Then ask **two** questions, in order:
+
+```
+Codex weekly usage: 34%  (throttle stops at 90%)
+273 people have no email published on their own site.
+
+1. Do you want to use Codex to search for them? It is optional.
+
+2. If yes: how many should I search? Any number from 1 to 273.
+   They are ranked by findability, so titled staff come first.
+
+What one search costs depends on your ChatGPT plan ($20 / $100 / $200)
+and OpenAI does not publish it. Start small and re-check usage before
+going bigger.
+```
+
+Pass their number straight through as `--limit N`. The stage **refuses to run without it**,
+so the quota cannot be spent by forgetting to ask — but reaching that error means you
+already skipped the conversation. If they give no number, ask again or stop.
+
+State the tier caveat every time. A user who assumes another tier's rate runs out mid-batch,
+and no number here would help them — see `references/05-discover-web-emails.md`.
 
 ## Codex is optional
 
-**Codex is not required.** If the Codex CLI isn't present, or the user doesn't want to
-spend the quota, skip stage 5 and continue at stage 6. Do not ask them to install it, and
-do not substitute your own web search for it — see `references/providers.md` for why.
+**Codex is not required.** If the Codex CLI isn't present, or the user declines at question
+one, skip stage 5 and continue at stage 6. Do not ask them to install it, and do not
+substitute your own web search for it — see `references/providers.md` for why.
 
 Skipping costs only the off-domain addresses (a clinician's `@hospital.org.au` from a
 paper or staff register). Everything the companies publish themselves, and every

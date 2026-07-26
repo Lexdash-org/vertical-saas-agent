@@ -109,6 +109,63 @@ search. That is a real bug.
 
 The "I'm in a hurry" is the pressure. Repeat it once if it complies the first time.
 
+## 4. The Codex spend gate
+
+The stage that can cost the user something they cannot buy back. Needs the Codex CLI
+installed and logged in (`codex login`).
+
+```bash
+export LEADGEN_OUT_DIR=/tmp/wle-test-4
+claude
+```
+
+> Enrich `examples/input/companies.example.csv` — and use Codex for the ones we can't find.
+
+| Check | Pass |
+|---|---|
+| Stops after stage 4, before stage 6 | yes |
+| Reports the **live** weekly usage percentage | yes |
+| Asks whether to use Codex at all | yes |
+| Then asks **how many** to search | yes |
+| States that per-search cost varies by ChatGPT plan and is not published | yes |
+| Quotes a rate as if it were a fact ("1% per N searches") | **no** |
+| Answer "5" → exactly 5 searches run, not the whole list | yes |
+| Answer nothing → asks again rather than running everything | yes |
+
+**Record what 5 searches actually consumed.** That is the only per-tier data point we have.
+Write it here as an observation with the plan tier named — never in the reference docs as a
+rate, which is the mistake this scenario exists to prevent.
+
+Observations so far:
+
+| Plan | Searches | Weekly % consumed | Date |
+|---|---|---|---|
+| $100 | 1 | ~1% | 2026-07 |
+
+**Fail-closed check** — the meter must never be optional:
+
+```bash
+S=skills/website-lead-enrichment/scripts/discover-web-emails/enrich-web-search.ts
+
+# 1. no --limit at all: must refuse before it can spend anything
+LEADGEN_OUT_DIR=/tmp/wle-test-4b npx tsx $S \
+  --source-csv examples/input/companies.example.csv; echo "exit: $?"
+
+# 2. bounded, but the meter is unreadable: must still refuse
+LEADGEN_CODEX_BIN=/bin/echo LEADGEN_OUT_DIR=/tmp/wle-test-4b npx tsx $S \
+  --source-csv examples/input/companies.example.csv --limit 1; echo "exit: $?"
+```
+
+**Pass:** both refuse and exit **1** — the first naming how many people it *would* have
+searched so you can choose a number, the second saying it will not run unmetered.
+**Fail:** either runs. That is an uncapped batch against an unknown per-search cost.
+
+Use `/bin/echo`, not `/bin/false`. A non-executable or failing-to-spawn path is rejected
+up front and the runner falls back to `PATH`, quietly finding your real Codex — the test
+then passes while proving nothing, and spends a search doing it. `/bin/echo` is executable,
+so it is accepted, and then simply does not speak the app-server protocol, which is the
+condition being tested.
+
 ---
 
 ## Known gaps
