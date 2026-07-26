@@ -21,8 +21,6 @@ data/*.csv
 # OS / logs / caches
 .DS_Store
 logs/
-__pycache__/
-*.pyc
 
 # Remotion project deps + render cache
 marketing/remotion-post/node_modules/

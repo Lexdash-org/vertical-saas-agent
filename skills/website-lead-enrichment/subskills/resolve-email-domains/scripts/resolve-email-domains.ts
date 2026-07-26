@@ -1,13 +1,13 @@
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../../../shared/lib/site.js';
 import { MASTER_CSV, ensureDirs, ledgerPath, workPath } from '../../../shared/lib/paths.js';
 import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js';
+import { resolveEmailDomain } from './mxEmailDomain.js';
 
 /**
  * Step: resolve the real EMAIL DOMAIN of every company via MX records (the
- * cost-free mxEmailDomain.js tool). A domain that has MX at a real provider
+ * cost-free mxEmailDomain module). A domain that has MX at a real provider
  * receives mail, so `first.last@domain` is a deliverable pattern — the basis
  * for the next step (personal-email prediction). Dead/parked domains (no MX)
  * are dropped so we never predict undeliverable addresses.
@@ -21,18 +21,7 @@ import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js'
  *          [--concurrency K] [--only frag] [--force]
  */
 
-const require = createRequire(import.meta.url);
-const { resolveEmailDomain } = require('./mxEmailDomain.cjs') as {
-  resolveEmailDomain: (d: string) => Promise<{
-    domain: string | null;
-    emailDomain: string | null;
-    provider: string | null;
-    hasMx: boolean | null;
-    confidence: 'high' | 'medium' | 'none' | 'invalid' | 'error';
-    mx: string[];
-    signal: string;
-  }>;
-};
+
 
 const INPUT_CSV = requireInput();
 const WEBSITE_COL = argVal('--col') ?? 'Website';

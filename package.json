@@ -17,7 +17,7 @@
     "learn": "tsx skills/website-lead-enrichment/subskills/learn-email-patterns/scripts/learn-email-patterns.ts",
     "permute": "tsx skills/website-lead-enrichment/subskills/email-permutation/scripts/apply-permutation.ts",
     "typecheck": "tsc --noEmit",
-    "check": "node .github/scripts/validate-skills.mjs . && tsx .github/scripts/check-invariants.ts"
+    "check": "tsx .github/scripts/validate-skills.ts . && tsx .github/scripts/check-invariants.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "2.0.114",

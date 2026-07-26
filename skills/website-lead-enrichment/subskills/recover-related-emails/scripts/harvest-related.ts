@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import pLimit from 'p-limit';
 import { normalizeWebsite, parseCsv, csvCell } from '../../../shared/lib/site.js';
 import { EmailSources, fetchPage } from '../../../shared/lib/scrape.js';
-import { MASTER_CSV, ledgerPath, loadEnv, writeAtomic } from '../../../shared/lib/paths.js';
+import { MASTER_CSV, ledgerPath, loadEnv, readMaster, writeAtomic } from '../../../shared/lib/paths.js';
 import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js';
 
 /**
@@ -111,7 +111,7 @@ async function harvest(t: { key: string; company: string; original: string }): P
 }
 
 function stillEmptyDomains(): Set<string> {
-  const { header: head, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
+  const { header: head, rows } = readMaster();
   const pe = head.indexOf('email'), be = head.indexOf('business_email'), di = head.indexOf('domain');
   const hasEmail = new Map<string, boolean>();
   for (const r of rows) {
@@ -162,7 +162,7 @@ function merge(): { own: number; related: number } {
       }
     }
   }
-  const { header, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
+  const { header, rows } = readMaster();
   const di = header.indexOf('domain');
   const bi = header.indexOf('business_email');
   const ai = header.indexOf('all_business_emails');

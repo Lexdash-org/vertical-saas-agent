@@ -71,6 +71,10 @@ stops. It does not reach for `curl`, a headless browser, the agent's own page-fe
 tool, or a web search. This is a hard rule, tested in TESTING.md, and enforced in
 CI for the skill text.
 
+**TypeScript only.** Every script in the repo is `.ts`, run through `tsx` — no build step,
+no `.js`/`.mjs`/`.cjs`, no Python. A contributor should never have to work out which runtime
+a given file needs.
+
 **Skills stay portable.** Write "run the script" rather than naming a specific agent's
 tool. CI rejects host-specific tool names in a `SKILL.md`.
 

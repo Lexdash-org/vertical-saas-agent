@@ -2,8 +2,8 @@
 /**
  * Validate every SKILL.md against the Agent Skills specification.
  *
- * Deliberately dependency-free: it runs on a bare `actions/setup-node` before
- * `npm ci`, so a broken lockfile still cannot hide a broken skill.
+ * Uses only the Node standard library, so the only thing it needs from
+ * node_modules is tsx itself.
  *
  * Checks, in order of how badly getting them wrong breaks a user:
  *   1. frontmatter exists, is delimited, and parses
@@ -34,11 +34,11 @@ const HOST_SPECIFIC = [
   /\bantml:invoke\b/i,
 ];
 
-const errors = [];
-const warnings = [];
+const errors: string[] = [];
+const warnings: string[] = [];
 
-function walk(dir) {
-  const out = [];
+function walk(dir: string): string[] {
+  const out: string[] = [];
   for (const entry of readdirSync(dir)) {
     const p = join(dir, entry);
     // Do not follow symlinks: .claude/skills/ points back here and would double-report.
@@ -52,7 +52,13 @@ function walk(dir) {
 }
 
 /** Shallow YAML: top-level `key: value` only, which is all the spec requires. */
-function parseFrontmatter(text, file) {
+interface Frontmatter {
+  fields: Record<string, string>;
+  raw: string;
+  body: string;
+}
+
+function parseFrontmatter(text: string, file: string): Frontmatter | null {
   if (!text.startsWith('---\n')) {
     errors.push(`${file}: no YAML frontmatter (must start with '---')`);
     return null;
@@ -63,8 +69,8 @@ function parseFrontmatter(text, file) {
     return null;
   }
   const raw = text.slice(0, end + 5);
-  const fields = {};
-  let key = null;
+  const fields: Record<string, string> = {};
+  let key: string | null = null;
   for (const line of text.slice(4, end + 1).split('\n')) {
     const m = /^([A-Za-z_][A-Za-z0-9_-]*):\s?(.*)$/.exec(line);
     if (m) {

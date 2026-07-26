@@ -6,18 +6,21 @@ The commands below start Claude Code (`claude`), because that is where the skill
 developed and validated. Substitute your own agent's launch command — the tests exercise
 the skill, not the host.
 
-## Before anything: protect your real results
+## Before anything: don't let a test touch real data
 
-`out/` and `ENRICHED-team-emails.csv` are gitignored — git has no copy. A test run writes
-to `out/` by default and would overwrite them.
+Point both of these somewhere disposable, every time:
 
 ```bash
-cp -R out ../out-BACKUP-$(date +%F) && cp ENRICHED-team-emails.csv ../
+export LEADGEN_OUT_DIR=/tmp/wle-test     # results land here instead of ./out
+export LEADGEN_ENV=/tmp/wle-test.env     # credentials read from here, not ~/.leadgen/.env
 ```
 
-Then always test with `LEADGEN_OUT_DIR` set, and point `LEADGEN_ENV` at a throwaway config
-file so a test never touches your real `~/.leadgen/.env`. Either may be a shell variable
-or a line in that file; the shell wins.
+`LEADGEN_OUT_DIR` matters because results default to `./out` in whatever directory you run
+from, so a test in a real working folder overwrites a real run. `LEADGEN_ENV` keeps a test
+away from your actual keys. Either may be a shell variable or a line in the config file;
+the shell wins.
+
+Pipeline output is gitignored, so git has no copy of it — a run you overwrite is gone.
 
 ---
 

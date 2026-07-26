@@ -7,10 +7,10 @@ companies' own sites.
 Built and validated on 1,097 Australian private medical clinics, which produced 9,122
 people.
 
-This is an **Agent Skill**, not a CLI. You point a coding agent at a CSV of websites and it
-runs the pipeline for you. Built and tested on Claude Code; the skill body names no
-host-specific tools, so any agent that reads `SKILL.md` and can run shell commands should
-work.
+You point a coding agent at a CSV of websites and it runs the pipeline for you. Built and
+tested on **Claude Code and Codex**; the skill body names no host-specific tools, so any
+agent that reads `SKILL.md` and can run shell commands should work — Copilot CLI and
+Gemini CLI read the same cross-runtime skills directory.
 
 ---
 
@@ -37,14 +37,20 @@ The separation is the point. Scraped and sourced addresses are real; anything wi
 
 ## Project status
 
-**Pre-release.** The pipeline is validated on a real 1,097-company run, but:
+**v1.0.0.** The pipeline is validated on a real 1,097-company run that produced 9,122
+people, and `npm run check` enforces ten invariants on every change — including that a
+predicted address can never reach the send-safe file. Known limits, in the order they are
+likely to matter to you:
 
-- No automated test suite — see [How to run tests](#how-to-run-tests) for what does exist.
-- Stage 5 hardcodes `Australia` into its location string; adapt before using it elsewhere.
-- Stage 4 matches "same business, different domain" by a 6-character prefix, which is
-  deliberately loose and can occasionally merge two similarly-named businesses.
-- The installer's release-download path expects a tagged GitHub release; installing from
-  a clone works today.
+- **No unit test suite.** The invariant checks cover load-bearing behaviours, not the
+  pipeline end to end. See [How to run tests](#how-to-run-tests) for what does exist.
+- **Stage 5 hardcodes `Australia`** into its search location string; adapt it before using
+  that stage elsewhere. It is optional, so the rest of the pipeline is unaffected.
+- **Stage 4 matches "same business, different domain" by a 6-character prefix**,
+  deliberately loose so `.com` ↔ `.com.au` mail domains are recovered. It can occasionally
+  merge two similarly-named businesses — spot-check on a large batch.
+- **Nothing verifies deliverability.** A confirmed mail domain means the domain accepts
+  mail, not that the mailbox exists.
 
 ## Requirements
 
@@ -56,9 +62,6 @@ The separation is the point. Scraped and sourced addresses are real; anything wi
 | An LLM | Any OpenAI-compatible endpoint (see [Configuration](#configuration)) |
 | Codex CLI | **Optional.** Only for stage 5; skip it and everything else runs |
 
-Stages 6 and 8 need no credentials at all — stage 6 is plain DNS, stage 8 is string
-generation.
-
 ## Installation
 
 Just ask for what you want — *"find the staff emails for these clinic websites"* — and the
@@ -67,25 +70,60 @@ already in place, so asking again later goes straight to the work.
 
 By hand, from a clone:
 
+**macOS / Linux**
+
 ```bash
 git clone https://github.com/Lexdash-org/vertical-saas-agent
 cd vertical-saas-agent
 npm install
-mkdir -p ~/.leadgen && cp .env.example ~/.leadgen/.env   # then fill it in
+mkdir -p ~/.leadgen && cp .env.example ~/.leadgen/.env
+open -e ~/.leadgen/.env        # macOS — or: nano ~/.leadgen/.env
+# Linux:  nano ~/.leadgen/.env  (or gedit / vim / code)
 ```
+
+**Windows (PowerShell)**
+
+```powershell
+git clone https://github.com/Lexdash-org/vertical-saas-agent
+cd vertical-saas-agent
+npm install
+New-Item -ItemType Directory -Force -Path "$HOME\.leadgen" | Out-Null
+Copy-Item .env.example "$HOME\.leadgen\.env"
+notepad "$HOME\.leadgen\.env"
+```
+
+Fill in the four required values — see [Configuration](#configuration) for what each one
+is and where to get it. The file is plain `KEY=value`, one per line; leave the optional
+ones as they are.
 
 To use it globally rather than from the clone, copy the skill folder plus the files it
 needs to run into your agent's skills directory — `~/.claude/skills/` for Claude Code,
 `~/.agents/skills/` for the cross-runtime location that Codex, Copilot CLI and Gemini CLI
-also read:
+also read.
+
+**macOS / Linux**
 
 ```bash
 DEST=~/.claude/skills            # or ~/.agents/skills
 cp -R skills/website-lead-enrichment "$DEST/"
-cp package.json tsconfig.json .env.example "$DEST/website-lead-enrichment/"
+cp package.json .npmrc tsconfig.json .env.example "$DEST/website-lead-enrichment/"
 cp -R examples "$DEST/website-lead-enrichment/"
 cd "$DEST/website-lead-enrichment" && npm install
 ```
+
+**Windows (PowerShell)**
+
+```powershell
+$DEST = "$HOME\.claude\skills"   # or "$HOME\.agents\skills"
+Copy-Item -Recurse skills\website-lead-enrichment "$DEST\"
+Copy-Item package.json,.npmrc,tsconfig.json,.env.example "$DEST\website-lead-enrichment\"
+Copy-Item -Recurse examples "$DEST\website-lead-enrichment\"
+cd "$DEST\website-lead-enrichment"; npm install
+```
+
+`.npmrc` is not optional — without it `npm install` fails, because firecrawl ships zod 3
+while this project uses zod 4 and npm's peer resolution refuses to proceed. The two
+resolve fine at runtime; only the installer objects.
 
 The `package.json` matters because npm resolves the stages' dependencies from it — but it
 no longer affects where anything is read from or written to. Credentials come from
@@ -161,18 +199,18 @@ mkdir -p ~/.leadgen && cp .env.example ~/.leadgen/.env
 It is not inside the project and not inside the installed skill, so the same keys work from
 every folder and on every agent, and reinstalling the skill cannot delete them.
 
-| Variable | Required | Purpose |
+| Variable | | Purpose |
 |---|---|---|
-| `LEADGEN_FIRECRAWL_API_KEY` | yes | site URL mapping (stage 1) |
-| `LEADGEN_ZYTE_API_KEY` | yes | page fetching (stages 2–4) |
-| `LEADGEN_LLM_API_KEY` | yes | any OpenAI-compatible provider |
-| `LEADGEN_LLM_BASE_URL` | no | omit for `api.openai.com`; else the provider's base URL |
-| `LEADGEN_LLM_MODEL_REASONING` | yes | ranking and format judgment |
-| `LEADGEN_LLM_MODEL_EXTRACTION` | no | people out of page text; defaults to the reasoning model |
-| `LEADGEN_CODEX_MODEL` | no | stage 5 model, defaults to `gpt-5.6-sol` |
-| `LEADGEN_CODEX_BIN` | no | override only — Codex is auto-detected from `PATH` |
-| `LEADGEN_OUT_DIR` | no | results default to `./out` in the folder you run from |
-| `LEADGEN_DEBUG` | no | verbose agent step tracing |
+| `LEADGEN_FIRECRAWL_API_KEY` | **required** | site URL mapping (stage 1) |
+| `LEADGEN_ZYTE_API_KEY` | **required** | page fetching (stages 2–4) |
+| `LEADGEN_LLM_API_KEY` | **required** | any OpenAI-compatible provider |
+| `LEADGEN_LLM_MODEL_REASONING` | **required** | ranking and format judgment |
+| `LEADGEN_LLM_BASE_URL` | optional | omit for `api.openai.com`; else the provider's base URL |
+| `LEADGEN_LLM_MODEL_EXTRACTION` | optional | people out of page text; defaults to the reasoning model |
+| `LEADGEN_CODEX_MODEL` | optional | stage 5 model, defaults to `gpt-5.6-sol` |
+| `LEADGEN_CODEX_BIN` | optional | override only — Codex is auto-detected from `PATH` |
+| `LEADGEN_OUT_DIR` | optional | results default to `./out` in the folder you run from |
+| `LEADGEN_DEBUG` | optional | verbose agent step tracing |
 
 Any OpenAI-compatible endpoint works — OpenRouter, Together, Groq, Ollama, vLLM, and Azure
 via `https://<resource>.cognitiveservices.azure.com/openai/v1/` with your deployment names

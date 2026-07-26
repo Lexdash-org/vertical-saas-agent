@@ -100,7 +100,7 @@ One list drives both the copy and the check, so they cannot drift apart:
 
 ```bash
 SRC=$(echo /tmp/vertical-saas-agent-*)     # or the checkout found in step 3
-NEEDS="package.json tsconfig.json .env.example examples/input"
+NEEDS="package.json .npmrc tsconfig.json .env.example examples/input"
 
 mkdir -p "$DEST"
 cp -R "$SRC/skills/website-lead-enrichment/." "$DEST/"
@@ -118,6 +118,10 @@ done
 
 cd "$DEST" && npm install
 ```
+
+`.npmrc` is not optional. It carries `legacy-peer-deps=true`, and without it `npm install`
+fails outright — firecrawl ships zod 3 while this project uses zod 4, and npm's strict peer
+resolution refuses to proceed. The two resolve fine at runtime; only the installer objects.
 
 A partial install is worse than none: on any missing entry remove `$DEST` entirely and
 report, rather than leaving a folder that half works.
@@ -157,22 +161,38 @@ Never print a key back, never echo the file, never commit it.
 
 ## Step 6 — Prove it works
 
-Both credential-free stages, against the bundled fixture and a scratch output directory, so
-nothing real is touched:
+Both credential-free stages, against a scratch output directory so nothing real is touched.
+
+**Stage 6 — proves the install.** DNS only: the files landed, dependencies resolve, the
+network works, paths point where they should.
 
 ```bash
 cd "$DEST"
-LEADGEN_OUT_DIR=/tmp/wle-check npx tsx \
+export CHECK=/tmp/wle-check && rm -rf "$CHECK"
+LEADGEN_OUT_DIR=$CHECK npx tsx \
   subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
   --input examples/input/companies.example.csv
-LEADGEN_OUT_DIR=/tmp/wle-check npx tsx \
-  subskills/email-permutation/scripts/apply-permutation.ts
 ```
 
-The first is DNS only — it proves the files landed, dependencies resolve and the network
-works. The second is pure string generation — it proves the output layer produces the three
-deliverable files. Checking only the first leaves untested the half that makes what the user
-actually receives.
+A provider breakdown means the install is sound.
+
+**Stage 8 — proves the output layer**, which is the half that makes what the user actually
+receives. It reads the master, so seed a throwaway one first; run against an empty
+directory it will correctly report that nothing has been extracted yet and prove nothing:
+
+```bash
+mkdir -p "$CHECK/.work"
+cat > "$CHECK/.work/team-master.csv" <<'CSV'
+company,domain,website,name,title,email,email_source_url,updated_at,business_email,all_business_emails,business_email_source_url,related_email
+Check Co,example.com,https://example.com,Jane Doe,Director,jane.doe@example.com,https://example.com/team,2026-01-01T00:00:00Z,,,,
+Check Co,example.com,https://example.com,John Smith,Analyst,,,2026-01-01T00:00:00Z,,,,
+CSV
+LEADGEN_OUT_DIR=$CHECK npx tsx subskills/email-permutation/scripts/apply-permutation.ts
+ls "$CHECK"          # expect: ready-to-send.csv, verify-before-sending.csv, README.txt, .work
+```
+
+One row is a real scraped address and one needs predicting, so a pass exercises both
+branches: the first lands in `ready-to-send.csv`, the second in `verify-before-sending.csv`.
 
 Then one cheap call per configured provider, and report which are live. Do not run a full
 enrichment as a health check.

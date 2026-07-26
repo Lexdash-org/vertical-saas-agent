@@ -1,9 +1,8 @@
 import fs from 'node:fs';
 import pLimit from 'p-limit';
-import { parseCsv } from '../../../shared/lib/site.js';
 import { llmClient, reasoningModel } from '../../../shared/lib/llm.js';
 import { firstLast, buildEmail, isValidTemplate, PATTERNS } from '../../../shared/lib/patterns.js';
-import { MASTER_CSV, ledgerPath, loadEnv, workPath } from '../../../shared/lib/paths.js';
+import { ledgerPath, loadEnv, readMaster, workPath } from '../../../shared/lib/paths.js';
 import { argVal } from '../../../shared/lib/cli.js';
 
 /**
@@ -44,7 +43,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const { header, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
+  const { header, rows } = readMaster();
   const ix = Object.fromEntries(header.map((h, i) => [h, i]));
   const di = ix.domain, ni = ix.name, pe = ix.email, be = ix.business_email, abe = ix.all_business_emails, ri = ix.related_email;
   // Sourced open-web emails are real name->address pairs too. Off-domain ones are

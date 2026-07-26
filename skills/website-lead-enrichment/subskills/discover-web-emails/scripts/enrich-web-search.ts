@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../../../shared/lib/site.js';
-import { MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../../../shared/lib/paths.js';
+import { MASTER_CSV, ledgerPath, loadEnv, readMaster, workPath, writeAtomic } from '../../../shared/lib/paths.js';
 import { argVal, die, requireInput } from '../../../shared/lib/cli.js';
 import { resolveCodex } from '../../../shared/lib/codex.js';
 import { readEnv } from '../../../shared/lib/env.js';
@@ -219,7 +219,7 @@ function merge(): { added: number } {
       try { const r = JSON.parse(line) as Hit; if (usable(r)) found.set(r.rowId, r); } catch { /* skip */ }
     }
   }
-  const { header, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
+  const { header, rows } = readMaster();
   const newCols = ['web_found_email', 'web_found_source', 'web_found_confidence'];
   const keep = header.filter((h) => !newCols.includes(h));
   // best_email/_basis only exist once permutation has run. Create them if absent —
@@ -279,7 +279,7 @@ async function main(): Promise<void> {
   codexBin = requireCodex();
 
   const ctxMap = loadContext();
-  const { header, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
+  const { header, rows } = readMaster();
   const ix = Object.fromEntries(header.map((h, i) => [h, i]));
   const di = ix.domain, ni = ix.name, ti = ix.title, co = ix.company, we = ix.website, pe = ix.email;
 

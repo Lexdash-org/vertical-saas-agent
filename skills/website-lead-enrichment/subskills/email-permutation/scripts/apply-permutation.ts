@@ -4,10 +4,7 @@ import { permuteCsv } from './permute.js';
 import { csvCell, parseCsv } from '../../../shared/lib/site.js';
 import { basisToStatus } from '../../../shared/lib/basis.js';
 import { buildEmail, displayName, firstLast, nameTokens } from '../../../shared/lib/patterns.js';
-import {
-  INBOX_CSV, MASTER_CSV, README_TXT, READY_CSV, SUMMARY_JSON, VERIFY_CSV,
-  ledgerPath, loadEnv, workPath, writeAtomic,
-} from '../../../shared/lib/paths.js';
+import { INBOX_CSV, MASTER_CSV, README_TXT, READY_CSV, SUMMARY_JSON, VERIFY_CSV, ledgerPath, loadEnv, readMaster, workPath, writeAtomic } from '../../../shared/lib/paths.js';
 
 /**
  * Run the email-permutation skill over everyone lacking a real personal email,
@@ -210,7 +207,7 @@ function main(): void {
     ? JSON.parse(fs.readFileSync(PATTERNS_JSON, 'utf8'))
     : {};
 
-  const { header, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
+  const { header, rows } = readMaster();
   const ix = Object.fromEntries(header.map((h, i) => [h, i]));
   const di = ix.domain, ni = ix.name, pe = ix.email, be = ix.business_email;
   // Sourced open-web emails (stage 5). Real addresses, so they outrank every prediction.

@@ -3,6 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 import { ENV } from './env.js';
+import { die } from './cli.js';
+import { parseCsv } from './site.js';
 
 /**
  * Where the configuration and the output live.
@@ -87,6 +89,28 @@ export const SUMMARY_JSON = workPath('run-summary.json');
 export function ensureDirs(): void {
   fs.mkdirSync(COMPANIES_DIR, { recursive: true });
   fs.mkdirSync(LEDGER_DIR, { recursive: true });
+}
+
+/**
+ * Read the master, or stop with a message that says what to run first.
+ *
+ * Every stage downstream of extraction needs it. A missing master means the pipeline was
+ * started in the middle — nothing is broken — and an unhandled ENOENT stack trace is a
+ * terrible answer to that, especially on a fresh install where it is the likeliest state.
+ *
+ * Stages that CREATE or fill the master (extract-team-members, harvest-business-emails,
+ * resolve-email-domains) deliberately do not use this: for them an absent master is
+ * normal and they carry on with an empty set.
+ */
+export function readMaster(): { header: string[]; rows: string[][] } {
+  if (!fs.existsSync(MASTER_CSV)) {
+    die(
+      `no team-master.csv yet — nothing has been extracted into ${OUT_DIR}.\n` +
+        '       Run the earlier stages first: discover-team-pages, then extract-team-members.\n' +
+        '       They create the master this stage reads.',
+    );
+  }
+  return parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
 }
 
 /**

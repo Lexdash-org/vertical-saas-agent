@@ -19,13 +19,11 @@ jobs:
           node-version: '20'
           cache: npm
 
-      # Runs before `npm ci`, on purpose: a broken lockfile must not be able to
-      # mask a broken skill.
-      - name: Validate SKILL.md files
-        run: node .github/scripts/validate-skills.mjs .
-
       - name: Install dependencies
         run: npm ci
+
+      - name: Validate SKILL.md files
+        run: npx tsx .github/scripts/validate-skills.ts .
 
       - name: Typecheck
         run: npm run typecheck
