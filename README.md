@@ -7,6 +7,17 @@ companies' own sites.
 Built and validated on 1,097 Australian private medical clinics, which produced 9,122
 people.
 
+[![skills.sh](https://skills.sh/b/Lexdash-org/vertical-saas-agent)](https://skills.sh/Lexdash-org/vertical-saas-agent)
+
+## Install
+
+```bash
+npx skills add Lexdash-org/vertical-saas-agent --skill find-team-emails
+```
+
+That installs one skill. Ask it for what you want — *"find the staff emails for these
+clinic websites"* — and it sets up the rest on first use, then runs.
+
 You point a coding agent at a CSV of websites and it runs the pipeline for you. Built and
 tested on **Claude Code and Codex**; the skill body names no host-specific tools, so any
 agent that reads `SKILL.md` and can run shell commands should work — Copilot CLI and
@@ -62,13 +73,12 @@ likely to matter to you:
 | An LLM | Any OpenAI-compatible endpoint (see [Configuration](#configuration)) |
 | Codex CLI | **Optional.** Only for stage 5; skip it and everything else runs |
 
-## Installation
+## Installing by hand
 
-Just ask for what you want — *"find the staff emails for these clinic websites"* — and the
-`find-team-emails` skill sets everything up the first time, then runs. It checks what is
-already in place, so asking again later goes straight to the work.
+The one-line install above is the normal path. Everything below is for working on this
+repo, or installing without the skills CLI.
 
-By hand, from a clone:
+From a clone:
 
 **macOS / Linux**
 
