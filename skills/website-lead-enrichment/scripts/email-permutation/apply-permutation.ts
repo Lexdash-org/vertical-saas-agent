@@ -30,6 +30,7 @@ const DOMAIN_CACHE = ledgerPath('email-domain-cache.jsonl');
 const PATTERNS_JSON = workPath('company-email-patterns.json');
 const BIZ_LEDGER = ledgerPath('business-email-ledger.jsonl');
 const REL_LEDGER = ledgerPath('related-email-ledger.jsonl');
+const RENDER_LEDGER = ledgerPath('render-email-ledger.jsonl');
 const IN_CSV = workPath('permute-input.csv');
 const WIDE_CSV = workPath('permute-wide.csv');
 const LONG_CSV = workPath('permute-long.csv');
@@ -151,6 +152,23 @@ function buildInboxes(): Map<string, Inbox> {
     if (rec.error || !rec.domain || !rec.businessEmails?.length) continue;
     const inbox = slot(rec.domain, rec.company ?? '', rec.website ?? '');
     inbox.business = rec.businessEmails;
+    if (rec.businessEmailSourceUrl) inbox.sources[rec.businessEmails[0]] = rec.businessEmailSourceUrl;
+  }
+
+  /**
+   * The render retry (`npm run harvest:render`) writes its own ledger, deliberately, so a
+   * slow JS-rendering pass cannot corrupt the good static harvest. The cost of that split
+   * was that nothing read it: a company with no named staff has no master row — the master
+   * is per-person — so an inbox recovered only by rendering reached neither output file.
+   * That is the exact failure this function was written to end, one pass further down.
+   *
+   * Same record shape as the static harvest, and it only runs on domains stage 3 left
+   * empty, so it adds rather than replaces.
+   */
+  for (const rec of readJsonl<BizRec>(RENDER_LEDGER)) {
+    if (rec.error || !rec.domain || !rec.businessEmails?.length) continue;
+    const inbox = slot(rec.domain, rec.company ?? '', rec.website ?? '');
+    for (const e of rec.businessEmails) if (!inbox.business.includes(e)) inbox.business.push(e);
     if (rec.businessEmailSourceUrl) inbox.sources[rec.businessEmails[0]] = rec.businessEmailSourceUrl;
   }
 

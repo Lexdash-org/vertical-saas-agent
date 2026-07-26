@@ -70,7 +70,6 @@ function classify(emails: string[], domainKey: string): { business: string[]; ot
     const sameDomain = at === bare || at.endsWith(`.${bare}`) || bare.endsWith(at) || at.endsWith(root);
     if (sameDomain) business.add(lower); // any address on the company's own domain
     else if (ROLE.test(lower) && FREEMAIL.test(lower)) other.add(lower); // e.g. clinicname@gmail.com
-    else if (FREEMAIL.test(lower) && ROLE.test(lower)) other.add(lower);
   }
   // A role address (info@, reception@) ranks ahead of a personal one on the same domain.
   const sorted = [...business].sort((a, b) => Number(ROLE.test(b)) - Number(ROLE.test(a)));
