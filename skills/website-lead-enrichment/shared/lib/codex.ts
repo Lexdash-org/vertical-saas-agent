@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { ENV, readEnv } from './env.js';
 
 /**
  * Find the Codex CLI. One resolver, used by the discovery runner AND the usage probe, so
@@ -9,18 +10,18 @@ import path from 'node:path';
  *
  * Codex is OPTIONAL: `bin: null` means stage 5 is skipped, not that anything is broken.
  *
- * `CODEX_BIN` is an override, not the source of truth. A pinned absolute path — an nvm
- * directory from another machine, say — goes stale silently, so a CODEX_BIN that does not
+ * `LEADGEN_CODEX_BIN` is an override, not the source of truth. A pinned absolute path — an nvm
+ * directory from another machine, say — goes stale silently, so a LEADGEN_CODEX_BIN that does not
  * exist is reported and stepped over rather than trusted.
  */
 
-export type CodexSource = 'CODEX_BIN' | 'PATH' | 'well-known' | 'not-found';
+export type CodexSource = 'LEADGEN_CODEX_BIN' | 'PATH' | 'well-known' | 'not-found';
 
 export interface CodexResolution {
   /** Absolute path or bare command, or null when Codex is not installed. */
   bin: string | null;
   source: CodexSource;
-  /** Set when CODEX_BIN pointed somewhere unusable. Worth surfacing to the user. */
+  /** Set when LEADGEN_CODEX_BIN pointed somewhere unusable. Worth surfacing to the user. */
   warning?: string;
 }
 
@@ -74,16 +75,16 @@ export function resolveCodex(env: NodeJS.ProcessEnv = process.env): CodexResolut
   // Resolved once — the pinned-bare-name path used to ask twice, forking a shell twice.
   const onPath = fromPath();
 
-  const pinned = env.CODEX_BIN?.trim();
+  const pinned = readEnv('codexBin', env);
   if (pinned) {
     // A bare command name is a preference, not a path — let PATH resolve it.
     if (!pinned.includes('/')) {
-      if (onPath) return { bin: onPath, source: 'CODEX_BIN' };
+      if (onPath) return { bin: onPath, source: ENV.codexBin };
     } else if (isExecutableFile(pinned)) {
-      return { bin: pinned, source: 'CODEX_BIN' };
+      return { bin: pinned, source: ENV.codexBin };
     } else {
       warning =
-        `CODEX_BIN points at ${pinned}, which is not an executable file on this machine. ` +
+        `LEADGEN_CODEX_BIN points at ${pinned}, which is not an executable file on this machine. ` +
         'Ignoring it and searching PATH instead — you can safely delete the line from .env.';
     }
   }

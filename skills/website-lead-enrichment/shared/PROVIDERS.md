@@ -21,46 +21,61 @@ configuration problem to surface, never a routing problem to work around.
 
 ## Credentials
 
-Real values live in `<project-root>/.env`, which is gitignored. `.env.example` documents
-the shape. `loadEnv()` in `shared/lib/paths.ts` loads it for every entry point.
+Real values live in **`~/.leadgen/.env`** — one file, for every host and every project, so
+a user running both Claude Code and Codex configures once and a skill reinstall cannot
+delete their keys. `.env.example` documents the shape. `LEADGEN_ENV` points at a different
+file, for tests and CI.
+
+Every name is declared once in `shared/lib/env.ts` and read through `readEnv()` /
+`requireEnv()`. Nothing else in the project may name a variable — CI enforces it — because
+a missed rename surfaces as "key not set", which looks exactly like a user who never
+configured anything.
 
 | Variable | Provider | Used for |
 |---|---|---|
-| `FIRECRAWL_API_KEY` | Firecrawl | site URL mapping (stage 1 only) |
-| `ZYTE_API_KEY` | Zyte | every page fetch (stages 2, 3, 4) |
-| `LLM_API_KEY` **or** `AZURE_OPENAI_API_KEY` | any OpenAI-compatible | ranking, extraction, pattern judgment |
-| `LLM_BASE_URL` **or** `AZURE_OPENAI_ENDPOINT` | any OpenAI-compatible | omit `LLM_BASE_URL` for `api.openai.com` |
-| `LLM_MODEL_REASONING` **or** `AZURE_OPENAI_DEPLOYMENT_SOL` | — | reasoning role — ranking and judgment |
-| `LLM_MODEL_EXTRACTION` **or** `AZURE_OPENAI_DEPLOYMENT_LUNA` | — | extraction role — people out of page text |
-| `CODEX_MODEL` | Codex CLI | optional; defaults to `gpt-5.6-sol` |
-| `CODEX_BIN` | Codex CLI | optional **override** — Codex is auto-detected |
+| `LEADGEN_FIRECRAWL_API_KEY` | Firecrawl | site URL mapping (stage 1 only) |
+| `LEADGEN_ZYTE_API_KEY` | Zyte | every page fetch (stages 2, 3, 4) |
+| `LEADGEN_LLM_API_KEY` | any OpenAI-compatible | ranking, extraction, pattern judgment |
+| `LEADGEN_LLM_BASE_URL` | any OpenAI-compatible | omit for `api.openai.com` |
+| `LEADGEN_LLM_MODEL_REASONING` | — | reasoning role — ranking and judgment |
+| `LEADGEN_LLM_MODEL_EXTRACTION` | — | extraction role; defaults to the reasoning model |
+| `LEADGEN_CODEX_MODEL` | Codex CLI | optional; defaults to `gpt-5.6-sol` |
+| `LEADGEN_CODEX_BIN` | Codex CLI | optional **override** — Codex is auto-detected |
+| `LEADGEN_OUT_DIR` | — | optional; results default to `./out` where the user runs |
+| `LEADGEN_DEBUG` | — | optional; verbose agent step tracing |
 
-**The LLM rows are either/or.** Reporting `LLM_API_KEY: missing` on a machine configured
-with the Azure preset is a false alarm — check for *one of each pair*, not for `LLM_*`
-specifically. A working Azure setup has no `LLM_*` variables at all.
-| `LEADGEN_ROOT` | — | optional; project root when installed outside the repo |
-| `LEADGEN_OUT_DIR` | — | optional; redirect pipeline state, e.g. for a test run |
+### The prefix is the point
+
+`LEADGEN_` is not decoration. A credential stored under a shared name — `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY` — silently switches Claude Code and Codex from the subscription the
+user pays for to API billing. Owning the whole namespace means this project can never do
+that to someone, whatever they set it in.
+
+`OPENAI_API_KEY` must stay **unset**. Every Codex spawn deletes it from the child
+environment so Codex authenticates against the ChatGPT subscription rather than a stray
+API key. This project never reads it.
 
 ### Any OpenAI-compatible LLM
 
 The LLM is not tied to one vendor. Anything speaking the OpenAI chat-completions API
 works — OpenAI, Azure OpenAI, OpenRouter, Together, Groq, vLLM, Ollama, LM Studio. Set
-`LLM_BASE_URL` to the provider's base URL (omit it for OpenAI itself).
+`LEADGEN_LLM_BASE_URL` to the provider's base URL, omitting it for OpenAI itself.
+
+There is **one** provider path. Azure had a dedicated preset; it was removed because Azure
+already speaks the OpenAI API under `/openai/v1/`, so the preset was a second route to the
+same place — and it cost a provider-selection bug, a four-deep model fallback chain, two
+undocumented variables, and an either/or caveat in preflight. Azure users set:
+
+```
+LEADGEN_LLM_BASE_URL=https://<resource>.cognitiveservices.azure.com/openai/v1/
+LEADGEN_LLM_MODEL_REASONING=<deployment name>
+```
 
 Two roles exist because the jobs differ: **reasoning** ranks pages and adjudicates
 ambiguous email formats; **extraction** pulls structured records out of page text. One
-model can fill both — point the two variables at the same name. Both roles need reliable
-JSON output (`response_format: json_object`); a model that ignores that will fail
-extraction.
-
-**Azure preset.** The validated defaults are Azure `gpt-5.6-sol` (reasoning) and
-`gpt-5.6-luna` (extraction). Setting `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`,
-`AZURE_OPENAI_DEPLOYMENT_SOL` and `AZURE_OPENAI_DEPLOYMENT_LUNA` works instead of the
-`LLM_*` variables — the `/openai/v1` compatible path is applied automatically, and the
-model name is the deployment name. `LLM_*` wins when both are present.
-
-`OPENAI_API_KEY` must stay **unset**. Stage 5 deletes it from the Codex child environment
-so Codex authenticates against the ChatGPT subscription rather than a stray API key.
+model can fill both — point the two variables at the same name, or set only the reasoning
+one. Both roles need reliable JSON output (`response_format: json_object`); a model that
+ignores that will fail extraction.
 
 ## What each stage actually demands
 
@@ -105,21 +120,24 @@ runs against a **weekly** quota — see the discover-web-emails subskill for the
 Before starting a run, check the keys the selected stages need and report every missing
 one at once rather than failing at the first stage that touches a provider.
 
-Check the LLM as **either** `LLM_API_KEY` **or** `AZURE_OPENAI_API_KEY` — never report one
-missing while the other is set.
+The LLM needs `LEADGEN_LLM_API_KEY` and `LEADGEN_LLM_MODEL_REASONING`. There is one
+provider path, so there is no either/or to reason about: if those two are set, the LLM is
+configured.
 
 For Codex, run `subskills/discover-web-emails/scripts/codex-usage-check.ts`. It uses the
 same resolver the runner does, so it cannot report a binary that then fails to spawn, and
 it exits cleanly when Codex is absent. Report that as "stage 5 will be skipped", not as a
 missing prerequisite.
 
-Codex is **auto-detected** — `CODEX_BIN` if it points at a real executable, otherwise
+Codex is **auto-detected** — `LEADGEN_CODEX_BIN` if it points at a real executable, otherwise
 `PATH`, otherwise the usual install locations (homebrew, nvm, volta, `~/.local/bin`). A
-`CODEX_BIN` pinned to a path that doesn't exist is reported and ignored rather than
+`LEADGEN_CODEX_BIN` pinned to a path that doesn't exist is reported and ignored rather than
 trusted, because an absolute path copied between machines goes stale silently.
 
 ## Never do
 
 - Print, log, or echo a credential value, including into a ledger or an error message.
-- Copy `.env` into the skill folder or any distributed artifact.
+- Copy `~/.leadgen/.env` into the skill folder or any distributed artifact.
 - Commit a real key. `.env` is gitignored; `.env.example` carries placeholders only.
+- Suggest putting a key in a shell profile. This project reads one file; a credential in
+  `~/.zshrc` is global to every tool on the machine and outlives any uninstall.

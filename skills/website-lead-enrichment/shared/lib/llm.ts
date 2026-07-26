@@ -1,12 +1,20 @@
 import { Firecrawl } from 'firecrawl';
 import OpenAI from 'openai';
+import { readEnv, requireEnv } from './env.js';
 
 /**
  * Provider clients, split by role so a stage only demands what it actually uses.
  *
- * The LLM is any OpenAI-compatible endpoint — OpenAI, Azure OpenAI, OpenRouter, Together,
- * Groq, vLLM, Ollama, LM Studio. Set LLM_BASE_URL + LLM_API_KEY and the two model names.
- * Azure's AZURE_OPENAI_* variables still work unchanged as a preset.
+ * **One provider path: any OpenAI-compatible endpoint.** OpenAI, Azure OpenAI, OpenRouter,
+ * Together, Groq, vLLM, Ollama, LM Studio. Set the base URL, the key and the two model
+ * names; omit the base URL for OpenAI itself.
+ *
+ * Azure used to have a dedicated preset. It was removed because Azure already speaks the
+ * OpenAI API under `/openai/v1/` — the preset was a second code path to the same place,
+ * and it cost a provider-selection bug, a four-deep model fallback chain, two undocumented
+ * variables and a whole either/or caveat in the preflight docs. Azure users point
+ * LEADGEN_LLM_BASE_URL at `https://<resource>.cognitiveservices.azure.com/openai/v1/` and
+ * use their deployment names as the model names.
  *
  * Two roles, because the jobs differ:
  *   reasoning  — ranks pages, adjudicates ambiguous email formats
@@ -14,85 +22,46 @@ import OpenAI from 'openai';
  * One model can fill both; point the two variables at the same name.
  */
 
-const need = (name: string, env: NodeJS.ProcessEnv): string => {
-  const v = env[name];
-  if (!v) throw new Error(`${name} not set (expected in the project-root .env)`);
-  return v;
-};
+/** Trailing slash matters to the SDK's URL joining; normalize once. */
+const withSlash = (url: string): string => `${url.replace(/\/+$/, '')}/`;
 
-/** Azure exposes an OpenAI-compatible surface under /openai/v1/ on the resource host. */
-const azureBaseUrl = (endpoint: string): string => {
-  const e = endpoint.replace(/\/+$/, '');
-  return e.endsWith('/openai/v1') ? `${e}/` : `${e}/openai/v1/`;
-};
-
-/**
- * The chat client. Prefers the generic variables; falls back to the Azure preset so
- * existing .env files keep working.
- */
 export function llmClient(env: NodeJS.ProcessEnv = process.env): OpenAI {
-  if (env.LLM_BASE_URL || env.LLM_API_KEY) {
-    return new OpenAI({
-      apiKey: need('LLM_API_KEY', env),
-      // Omit LLM_BASE_URL to talk to api.openai.com.
-      ...(env.LLM_BASE_URL ? { baseURL: env.LLM_BASE_URL.replace(/\/+$/, '') + '/' } : {}),
-    });
-  }
-  if (env.AZURE_OPENAI_ENDPOINT) {
-    return new OpenAI({
-      apiKey: need('AZURE_OPENAI_API_KEY', env),
-      baseURL: azureBaseUrl(env.AZURE_OPENAI_ENDPOINT),
-    });
-  }
-  throw new Error(
-    'no LLM configured: set LLM_API_KEY (plus LLM_BASE_URL for a non-OpenAI endpoint), ' +
-      'or the AZURE_OPENAI_* preset. See shared/PROVIDERS.md.',
-  );
+  const baseURL = readEnv('llmBaseUrl', env);
+  return new OpenAI({
+    apiKey: requireEnv('llmKey', 'the language model that ranks pages and extracts people', env),
+    // Omitted entirely for api.openai.com, which is the SDK's own default.
+    ...(baseURL ? { baseURL: withSlash(baseURL) } : {}),
+  });
 }
 
-/** Ranking / judgment model. Validated default: Azure gpt-5.6-sol. */
+/** Ranking / judgment model. */
 export function reasoningModel(env: NodeJS.ProcessEnv = process.env): string {
-  return (
-    env.LLM_MODEL_REASONING ||
-    env.AZURE_OPENAI_DEPLOYMENT_SOL ||
-    env.AZURE_OPENAI_RANK_DEPLOYMENT ||
-    env.AZURE_OPENAI_DEPLOYMENT_NAME ||
-    need('LLM_MODEL_REASONING', env)
-  );
+  return requireEnv('llmModelReasoning', 'ranking team pages and judging email formats', env);
 }
 
-/** Structured-extraction model. Validated default: Azure gpt-5.6-luna. */
+/** Structured-extraction model. Falls back to the reasoning model — one model can do both. */
 export function extractionModel(env: NodeJS.ProcessEnv = process.env): string {
-  return (
-    env.LLM_MODEL_EXTRACTION ||
-    env.AZURE_OPENAI_DEPLOYMENT_LUNA ||
-    // Fall back to the reasoning model: one model can do both jobs.
-    reasoningModel(env)
-  );
+  return readEnv('llmModelExtraction', env) ?? reasoningModel(env);
 }
 
 /**
- * Base URL and key for callers that need the raw pair rather than a client — the
- * Vercel AI SDK provider in the extraction agent. Same precedence as llmClient.
+ * Base URL and key for callers that need the raw pair rather than a client — the Vercel
+ * AI SDK provider in the extraction agent.
  */
 export function llmEndpoint(env: NodeJS.ProcessEnv = process.env): {
   baseURL: string;
   apiKey: string;
 } {
-  if (env.LLM_BASE_URL || env.LLM_API_KEY) {
-    return {
-      baseURL: (env.LLM_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/+$/, ''),
-      apiKey: need('LLM_API_KEY', env),
-    };
-  }
   return {
-    baseURL: azureBaseUrl(need('AZURE_OPENAI_ENDPOINT', env)).replace(/\/+$/, ''),
-    apiKey: need('AZURE_OPENAI_API_KEY', env),
+    baseURL: (readEnv('llmBaseUrl', env) ?? 'https://api.openai.com/v1').replace(/\/+$/, ''),
+    apiKey: requireEnv('llmKey', 'the language model', env),
   };
 }
 
 export function firecrawlClient(env: NodeJS.ProcessEnv = process.env): Firecrawl {
-  return new Firecrawl({ apiKey: need('FIRECRAWL_API_KEY', env) });
+  return new Firecrawl({
+    apiKey: requireEnv('firecrawlKey', 'mapping a site\'s URLs (stage 1)', env),
+  });
 }
 
 export interface TeamPagesClients {
