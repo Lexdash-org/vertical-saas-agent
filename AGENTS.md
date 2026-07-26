@@ -4,7 +4,6 @@
      Two filenames because the runtimes disagree on where to look —
      Codex and others read AGENTS.md, Claude Code reads CLAUDE.md. -->
 
-
 Instructions for a coding agent contributing to **this repository**. If you are looking for
 how to *use* the tool, read the [README](README.md) instead.
 
@@ -16,7 +15,7 @@ change anything.
 ## Verify with
 
 ```bash
-npm run check      # SKILL.md spec compliance + ten project invariants
+npm run check      # SKILL.md spec compliance + the project invariants
 npm run typecheck  # tsc --noEmit
 npx tsc --noEmit --noUnusedLocals
 ```

@@ -18,18 +18,62 @@ mkdir -p ~/.leadgen && cp .env.example ~/.leadgen/.env   # then fill it in
 You can do useful work without any credentials: stage 6 is plain DNS, stage 8 is string
 generation, and everything in `scripts/lib/` is pure.
 
+To install from the clone rather than through the skills CLI, copy the skill plus the files
+it needs to run into your agent's skills directory — `~/.claude/skills/` for Claude Code,
+`~/.agents/skills/` for the cross-runtime location Codex, Copilot CLI and Gemini CLI read:
+
+```bash
+DEST=~/.claude/skills/website-lead-enrichment
+mkdir -p "$DEST"
+cp -R skills/website-lead-enrichment/. "$DEST/"
+cp package.json .npmrc tsconfig.json .env.example "$DEST/"
+mkdir -p "$DEST/examples" && cp -R examples/input "$DEST/examples/"
+cd "$DEST" && npm install
+```
+
+`.npmrc` is not optional — it carries `legacy-peer-deps=true`, and without it `npm install`
+fails outright, because firecrawl ships zod 3 while this project uses zod 4 and npm's peer
+resolution refuses to proceed. The two resolve fine at runtime; only the installer objects.
+
+`package.json` matters only so npm can resolve the stages' dependencies. It does not affect
+where anything is read from or written to — credentials always come from `~/.leadgen/.env`
+and results always land in `./out` wherever you run.
+
+### Running a stage by hand
+
+```bash
+S=skills/website-lead-enrichment/scripts
+L=data/your-list.csv     # --input is required; there is no default
+
+npx tsx $S/discover-team-pages/rank-batch.ts --input $L --col Website --name-col Name
+npx tsx $S/extract-team-members/run-batch.ts --input $L
+npx tsx $S/harvest-business-emails/harvest-business-emails.ts --input $L
+npx tsx $S/recover-related-emails/harvest-related.ts --input $L
+npx tsx $S/discover-web-emails/enrich-web-search.ts --source-csv $L --limit 25  # optional
+npx tsx $S/resolve-email-domains/resolve-email-domains.ts --input $L
+npx tsx $S/learn-email-patterns/learn-email-patterns.ts
+npx tsx $S/email-permutation/apply-permutation.ts
+```
+
+Stage 5's `--limit` is **required**, not a convenience: it is the only stage whose budget
+cannot be bought back, so it refuses to run unbounded.
+
+Run them one at a time — two stages writing `out/.work/team-master.csv` concurrently will
+clobber each other. Every stage is resumable; re-running one picks up where it stopped.
+
 ## Repository layout
 
 ```text
 skills/
 ├── website-lead-enrichment/          # the skill people install
 │   ├── SKILL.md                      # the router — orchestration only
-│   ├── shared/
-│   │   ├── PROVIDERS.md              # the one copy of the credential contract
-│   │   ├── PIPELINE-STATE.md         # out/ file contract, basis vocabulary, ledgers
-│   │   └── lib/                      # code shared across stages, incl. patterns.json
-│   ├── references/                   # router prose: NN-<stage>.md, providers, pipeline-state
-│   └── scripts/                      # <stage>/ tools + lib/ shared code
+│   ├── references/
+│   │   ├── NN-<stage>.md             # one per stage, numbered in pipeline order
+│   │   ├── providers.md              # the one copy of the credential contract
+│   │   └── pipeline-state.md         # out/ file contract, basis vocabulary, ledgers
+│   └── scripts/
+│       ├── <stage>/                  # that stage's tools
+│       └── lib/                      # shared across stages, incl. patterns.json
 └── find-team-emails/                 # the ONLY published skill: sets up the above, then runs it
 
 .github/scripts/                      # repo tooling: validate-skills, check-invariants,
@@ -47,7 +91,7 @@ therefore **cannot run from a clone** — it lives with the tooling rather than 
 
 `skills/<name>/SKILL.md` is the portable location every runtime understands. The repo
 deliberately keeps nothing under `.claude/` — to use the skill while developing, install
-it into your agent's skills directory with the copy commands in the README.
+it into your agent's skills directory with the copy commands under Getting set up.
 
 **Only the directories the specification names.** `SKILL.md` is required; `scripts/`,
 `references/` and `assets/` are the standard optional ones. A long pipeline is decomposed
@@ -98,7 +142,7 @@ npm run typecheck                  # tsc --noEmit
 npx tsc --noEmit --noUnusedLocals  # also catches dead code
 ```
 
-`npm run check` is the two scripts in `.github/scripts/`, and CI runs exactly the same
+`npm run check` is the three scripts in `.github/scripts/`, and CI runs exactly the same
 commands — nothing passes locally and fails there for a different reason.
 
 Free, keyless smoke test — proves the paths and dependencies resolve:

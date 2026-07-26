@@ -38,7 +38,7 @@
       "id": "predict-from-names",
       "request": "I have first names, last names and domains but no emails. Predict the addresses.",
       "expect": "website-lead-enrichment",
-      "why": "Reaches email-permutation, but through the parent \u2014 nested subskills are not independently discoverable, and running the permuter alone would skip the domain-priority rules."
+      "why": "Reaches email-permutation, but through the parent \u2014 stages are reference documents, not independently installable skills, and running the permuter alone would skip the domain-priority rules."
     },
     {
       "id": "single-person",

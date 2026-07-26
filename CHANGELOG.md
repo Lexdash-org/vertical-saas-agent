@@ -79,7 +79,7 @@ changed from.
 - **Node is the only runtime.** No Python interpreter is required.
 - MIT licence, README, TESTING.md, CONTRIBUTING.md, SECURITY.md, trigger evals, and a CI
   workflow that validates every `SKILL.md` against the Agent Skills specification.
-- `npm run check` — spec compliance for every `SKILL.md` plus ten project invariants,
+- `npm run check` — spec compliance for every `SKILL.md` plus the project invariants,
   including that the shipped example contains no predicted addresses.
 - `examples/output/enriched-sample.csv` — 50 real addresses, every one published by the
   company itself on its own domain, with the filter that produced them committed alongside

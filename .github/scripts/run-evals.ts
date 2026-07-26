@@ -19,8 +19,8 @@
  * NOT simulate a real model's judgement — it is a lower bound on description quality, kept
  * deterministic so it runs in CI with no credentials and no network.
  *
- * Deliberately runs only against the two TOP-LEVEL skills. Nested subskills are not
- * auto-discovered, so they never compete for routing.
+ * Runs against the two skills that exist. Stages are reference documents, not skills,
+ * so they are not discoverable and never compete for routing.
  */
 import fs from 'node:fs';
 import path from 'node:path';

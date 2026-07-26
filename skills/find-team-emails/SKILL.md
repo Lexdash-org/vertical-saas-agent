@@ -246,8 +246,8 @@ Either way, tell them once where things live:
 - credentials: `~/.leadgen/.env` — edit that file to change keys
 - results: `out/` **in whatever folder they run from**
 
-Do not explain the internal skill layout, the subskills, or what "routing" means. None of it
-helps someone who wants a list of emails.
+Do not explain the internal skill layout, the stage references, or what "routing" means.
+None of it helps someone who wants a list of emails.
 
 ## Rules
 

@@ -12,7 +12,7 @@
   },
   "_comment": [
     "`include` is a bare glob on purpose. This file is copied verbatim into an installed",
-    "skill, whose layout is <skill>/shared and <skill>/subskills — not the repo's",
+    "skill, whose layout is <skill>/references and <skill>/scripts — not the repo's",
     "skills/website-lead-enrichment/... . Repo-relative paths matched nothing there, so",
     "typecheck in an installed copy failed with TS18003 'No inputs were found'.",
     "One glob is correct in both layouts."

@@ -1,7 +1,7 @@
 # Providers and credentials
 
-The single source for what each stage needs and what it must never substitute. Subskills
-reference this file; they do not restate it.
+The single source for what each stage needs and what it must never substitute. The stage
+references point here; they do not restate it.
 
 ## The no-fallback rule
 
@@ -16,7 +16,7 @@ missing, **report the missing prerequisite and stop**. Do not substitute:
 
 The pipeline's value is that every returned address is traceable to a named source. A
 silent fallback produces rows that look identical to sourced ones but aren't, which
-corrupts the provenance contract in `PIPELINE-STATE.md`. Missing credentials are a
+corrupts the provenance contract in `./pipeline-state.md`. Missing credentials are a
 configuration problem to surface, never a routing problem to work around.
 
 ## Credentials
@@ -113,7 +113,7 @@ engine to approximate it — that reintroduces exactly the unsourced, unverified
 addresses the stage's guards exist to prevent. Skip it, and say so in the run summary.
 
 When Codex *is* used it needs an authenticated CLI (`codex login`) at version ≥ 0.145 and
-runs against a **weekly** quota — see the discover-web-emails subskill for the throttle.
+runs against a **weekly** quota — see `./05-discover-web-emails.md` for the throttle.
 
 ## Preflight
 

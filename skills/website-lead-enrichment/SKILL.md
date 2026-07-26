@@ -21,8 +21,8 @@ aren't in any data vendor, but most companies name their staff on their own site
 You run this pipeline for them. They do not run commands; you invoke the tools and report
 what came back.
 
-This file routes. Each stage's process, limits and failure modes live in its own subskill —
-read the subskill before running that stage.
+This file routes. Each stage's process, limits and failure modes live in its own reference
+document under `references/` — read it before running that stage.
 
 ## Before you start
 
@@ -122,21 +122,22 @@ prediction, is unaffected. Say in the summary that the stage was skipped.
 Run in this order. It is the order that preserves sourced addresses.
 
 Paths are relative to this skill's directory. Invoke each with `npx tsx` from the project
-root, passing the user's CSV — there is no default input list.
+root, passing the user's CSV — there is no default input list. Every tool lives in its own
+stage folder, so the path is always `scripts/<stage>/<tool>.ts`.
 
-| # | Stage | Subskill — read before running | Tool |
+| # | Stage | Read first | Tool — full path |
 |---|---|---|---|
-| 1 | Discover and rank team pages | `references/01-discover-team-pages.md` | `scripts/rank-batch.ts --input <csv>` |
-| 2 | Scrape and extract people | `references/02-extract-team-members.md` | `scripts/run-batch.ts --input <csv>` |
-| 3 | Harvest business emails | `references/03-harvest-business-emails.md` | `scripts/harvest-business-emails.ts --input <csv>` |
-| 4 | Recover related / cross-domain | `references/04-recover-related-emails.md` | `scripts/harvest-related.ts --input <csv>` |
-| 5 | Discover on the open web *(optional)* | `references/05-discover-web-emails.md` | `scripts/enrich-web-search.ts --source-csv <csv>` |
-| 6 | Resolve receiving mail domains | `references/06-resolve-email-domains.md` | `scripts/resolve-email-domains.ts --input <csv>` |
-| 7 | Learn each company's format | `references/07-learn-email-patterns.md` | `scripts/learn-email-patterns.ts` |
-| 8 | Permute and pick best_email | `references/08-email-permutation.md` | `scripts/apply-permutation.ts` |
+| 1 | Discover and rank team pages | `references/01-discover-team-pages.md` | `scripts/discover-team-pages/rank-batch.ts --input <csv>` |
+| 2 | Scrape and extract people | `references/02-extract-team-members.md` | `scripts/extract-team-members/run-batch.ts --input <csv>` |
+| 3 | Harvest business emails | `references/03-harvest-business-emails.md` | `scripts/harvest-business-emails/harvest-business-emails.ts --input <csv>` |
+| 4 | Recover related / cross-domain | `references/04-recover-related-emails.md` | `scripts/recover-related-emails/harvest-related.ts --input <csv>` |
+| 5 | Discover on the open web *(gated)* | `references/05-discover-web-emails.md` | `scripts/discover-web-emails/enrich-web-search.ts --source-csv <csv> --limit <N>` |
+| 6 | Resolve receiving mail domains | `references/06-resolve-email-domains.md` | `scripts/resolve-email-domains/resolve-email-domains.ts --input <csv>` |
+| 7 | Learn each company's format | `references/07-learn-email-patterns.md` | `scripts/learn-email-patterns/learn-email-patterns.ts` |
+| 8 | Permute and pick best_email | `references/08-email-permutation.md` | `scripts/email-permutation/apply-permutation.ts` |
 
-Each tool lives under its own subskill, e.g.
-`scripts/harvest-business-emails/harvest-business-emails.ts`.
+Stage 5's `--limit <N>` is required and is the number the user gave you. It refuses to run
+without one — see the gate above.
 
 Stages 1–5 collect **real** addresses. Stages 6–8 **predict** the remainder; they need no
 API keys and are cheap, so re-run them freely.

@@ -15,7 +15,7 @@ change anything.
 ## Verify with
 
 ```bash
-npm run check      # SKILL.md spec compliance + ten project invariants
+npm run check      # SKILL.md spec compliance + the project invariants
 npm run typecheck  # tsc --noEmit
 npx tsc --noEmit --noUnusedLocals
 ```
