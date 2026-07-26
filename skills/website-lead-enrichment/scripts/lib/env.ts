@@ -20,6 +20,10 @@
  * `.github/scripts/check-invariants.ts`.
  */
 
+import os from 'node:os';
+import path from 'node:path';
+import { config as loadDotenv } from 'dotenv';
+
 export const ENV = {
   firecrawlKey: 'LEADGEN_FIRECRAWL_API_KEY',
   zyteKey: 'LEADGEN_ZYTE_API_KEY',
@@ -39,8 +43,43 @@ export type EnvKey = keyof typeof ENV;
 /** Where the one config file lives, for error messages. Kept here so it reads the same everywhere. */
 export const CONFIG_HINT = '~/.leadgen/.env';
 
+/**
+ * The one config file, for every host and every project.
+ *
+ * Resolved from the shell only — `LEADGEN_ENV` is the pointer *to* the file, so it cannot
+ * live inside it. An explicit override for tests and CI, not project auto-discovery.
+ */
+export const CONFIG_ENV = process.env[ENV.envFile]
+  ? path.resolve(process.env[ENV.envFile] as string)
+  : path.join(os.homedir(), '.leadgen', '.env');
+
+let configLoaded = false;
+
+/**
+ * Load the config file, once.
+ *
+ * **Lazy on purpose, and the ordering is load-bearing.** `paths.ts` must read the shell's
+ * `LEADGEN_OUT_DIR` *before* this runs: `override: true` is deliberate — it stops a stale key
+ * exported from a shell profile shadowing the valid one and 401ing every request — but it
+ * would equally let the file win over the shell for the output directory, which is how tests
+ * redirect a run. Loading at module scope here would silently break that.
+ *
+ * `readEnv` calls this so a caller who imports only this module still sees configured keys.
+ * It used to be `paths.ts` that loaded the file, as an import side effect, which meant
+ * reading a credential without having imported `paths.ts` returned undefined and reported a
+ * fully configured machine as unconfigured — precisely the failure this file exists to
+ * prevent, per rule 1 above. It cost a real session a wrong diagnosis before it was found.
+ */
+export function loadConfig(): void {
+  if (configLoaded) return;
+  configLoaded = true;
+  loadDotenv({ path: CONFIG_ENV, quiet: true, override: true });
+}
+
 /** Read a declared variable. Empty string is treated as unset — a blank line in .env. */
 export function readEnv(key: EnvKey, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  // Only for the real environment: an injected env is a test's own, and must stay untouched.
+  if (env === process.env) loadConfig();
   const raw = env[ENV[key]];
   return raw && raw.trim() ? raw.trim() : undefined;
 }

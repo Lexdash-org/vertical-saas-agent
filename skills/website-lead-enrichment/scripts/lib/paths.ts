@@ -1,8 +1,6 @@
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { config as loadDotenv } from 'dotenv';
-import { ENV } from './env.js';
+import { ENV, loadConfig } from './env.js';
 import { die } from './cli.js';
 import { parseCsv } from './site.js';
 
@@ -16,26 +14,22 @@ import { parseCsv } from './site.js';
  */
 
 /**
- * The one config file, for every host and every project.
- *
  * A single absolute path means a user who runs both Claude Code and Codex configures their
- * keys once, and a reinstall of the skill cannot delete them. `LEADGEN_ENV` overrides it —
- * an explicit pointer for tests and CI, not project auto-discovery.
+ * keys once, and a reinstall of the skill cannot delete them. Declared in `env.ts` with the
+ * loader; re-exported here because callers reach for it alongside the other paths.
  */
-export const CONFIG_ENV = process.env[ENV.envFile]
-  ? path.resolve(process.env[ENV.envFile] as string)
-  : path.join(os.homedir(), '.leadgen', '.env');
+export { CONFIG_ENV } from './env.js';
 
 /**
  * Loaded at module load, before OUT_DIR is computed, so `LEADGEN_OUT_DIR` can come from
  * the config file. That used to be impossible — the config path depended on walking up
  * for a package.json, which had to happen after import time.
  *
- * `override: true` is deliberate and load-bearing: a stale key exported from a shell
- * profile otherwise shadows the valid one in the config file and every request 401s.
+ * The shell value is captured first because `loadConfig()` overrides: see `env.ts` for why
+ * that override is deliberate for credentials and wrong for the output directory.
  */
 const shellOutDir = process.env[ENV.outDir]; // captured before dotenv can overwrite it
-loadDotenv({ path: CONFIG_ENV, quiet: true, override: true });
+loadConfig();
 
 /**
  * Results land in the directory the user is standing in, not next to the installed skill.
