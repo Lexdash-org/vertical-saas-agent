@@ -10,5 +10,5 @@
     "noEmit": true,
     "allowJs": true
   },
-  "include": [".claude/skills/website-lead-enrichment/**/*.ts"]
+  "include": ["skills/website-lead-enrichment/**/*.ts", ".github/scripts/**/*.ts"]
 }

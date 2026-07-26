@@ -1,0 +1,84 @@
+name: Bug report
+description: A stage failed, produced wrong output, or the agent behaved incorrectly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you paste anything:** redact your API keys, and do not include real
+        lead lists or enrichment output. This pipeline handles contact details about
+        identifiable people — a public issue is the wrong place for them. A couple of
+        rows with the names and domains changed is enough.
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Which stage?
+      options:
+        - "1 - discover-team-pages"
+        - "2 - extract-team-members"
+        - "3 - harvest-business-emails"
+        - "4 - recover-related-emails"
+        - "5 - discover-web-emails (Codex, optional)"
+        - "6 - resolve-email-domains"
+        - "7 - learn-email-patterns"
+        - "8 - email-permutation"
+        - "Install / setup"
+        - "Agent routing (it read the skill and did the wrong thing)"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you asked for or ran, and what came back.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Console output
+      description: Redact keys and any real contact data.
+      render: shell
+
+  - type: input
+    id: versions
+    attributes:
+      label: Node version
+      placeholder: "node 20.11.0"
+    validations:
+      required: true
+
+  - type: input
+    id: provider
+    attributes:
+      label: LLM provider and models
+      description: Which endpoint, and the reasoning/extraction model names. No keys.
+      placeholder: "OpenAI-compatible via OpenRouter, reasoning=..., extraction=..."
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Which agent were you running?
+      placeholder: "Claude Code 2.x / Codex / other"
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed API keys and real contact data from everything above.
+          required: true
+        - label: "`npm run typecheck` passes on my checkout."

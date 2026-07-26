@@ -1,0 +1,49 @@
+name: validate
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      # Runs before `npm ci`, on purpose: a broken lockfile must not be able to
+      # mask a broken skill.
+      - name: Validate SKILL.md files
+        run: node .github/scripts/validate-skills.mjs .
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Typecheck with dead-code detection
+        run: npx tsc --noEmit --noUnusedLocals
+
+      # Pattern table, generator behaviour, and the shipped example. Runnable locally
+      # with the same command.
+      - name: Project invariants
+        run: npx tsx .github/scripts/check-invariants.ts
+
+      - name: No credentials committed
+        run: |
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo '.env is tracked — remove it and rotate the keys'; exit 1
+          fi
+          echo 'no .env in the index'
+
+      - name: No stray whitespace
+        run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD

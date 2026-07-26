@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest a capability, a provider, or a change to how a stage behaves.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do that you can't today?
+      description: Describe the situation, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part does this touch?
+      options:
+        - "A pipeline stage"
+        - "The router (how the agent orchestrates stages)"
+        - "A provider (LLM, scraping, DNS)"
+        - "Install / setup"
+        - "Output format or the best_email_basis contract"
+        - "Documentation"
+        - "Other"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried or considered?
+
+  - type: markdown
+    attributes:
+      value: |
+        **Out of scope, so you know before writing it up:** SMTP or catch-all
+        verification of predicted addresses (use a dedicated verification service),
+        bypassing the configured scrapers with a browser or a general web search, and
+        anything that would let a predicted address be presented as a confirmed one.

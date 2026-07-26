@@ -21,7 +21,7 @@ export function die(msg: string): never {
 /** The company-list CSV. Required everywhere; there is deliberately no default. */
 export const requireInput = (flag = '--input'): string =>
   argVal(flag) ??
-  die(`${flag} is required: pass a CSV of companies (see fixtures/companies.example.csv)`);
+  die(`${flag} is required: pass a CSV of companies (see examples/input/companies.example.csv)`);
 
 /**
  * Locate a column, failing loudly when it is absent.

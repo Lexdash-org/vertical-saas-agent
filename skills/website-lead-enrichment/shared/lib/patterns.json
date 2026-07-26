@@ -8,8 +8,8 @@
     "Each name IS its own formula, in a four-token vocabulary joined by '.' or nothing:",
     "  first = given name, last = surname, fi = first initial, li = last initial.",
     "So 'filast' builds <first-initial><last> and 'li.first' builds <last-initial>.<first>.",
-    "Both patterns.ts and permute.py derive their builders from these names, so the table",
-    "cannot drift between the TypeScript and Python halves of the pipeline.",
+    "patterns.ts derives its builders from these names, and permute.ts imports that table",
+    "rather than restating it, so generation and pattern-learning cannot drift apart.",
     "",
     "learn-email-patterns.ts also builds its model prompt's allowed-list from this file."
   ],

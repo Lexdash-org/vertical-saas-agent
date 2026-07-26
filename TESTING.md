@@ -1,6 +1,10 @@
 # Testing
 
-Four tests, cheapest first. Run each in a **fresh Claude session** so nothing carries over.
+Four tests, cheapest first. Run each in a **fresh agent session** so nothing carries over.
+
+The commands below start Claude Code (`claude`), because that is where the skill was
+developed and validated. Substitute your own agent's launch command — the tests exercise
+the skill, not the host.
 
 ## Before anything: protect your real results
 
@@ -11,9 +15,9 @@ to `out/` by default and would overwrite them.
 cp -R out ../out-BACKUP-$(date +%F) && cp ENRICHED-team-emails.csv ../
 ```
 
-Then always test with `LEADGEN_OUT_DIR` set. It must be a **real environment variable** —
-putting it in `.env` does not work, because the output path is resolved before `.env`
-loads.
+Then always test with `LEADGEN_OUT_DIR` set, and point `LEADGEN_ENV` at a throwaway config
+file so a test never touches your real `~/.leadgen/.env`. Either may be a shell variable
+or a line in that file; the shell wins.
 
 ---
 
@@ -21,8 +25,8 @@ loads.
 
 ```bash
 LEADGEN_OUT_DIR=/tmp/wle-smoke npx tsx \
-  .claude/skills/website-lead-enrichment/subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
-  --input fixtures/companies.example.csv
+  skills/website-lead-enrichment/subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+  --input examples/input/companies.example.csv
 ```
 
 **Pass:** prints a provider breakdown (Microsoft 365, Google Workspace, …).
@@ -42,7 +46,7 @@ claude
 Say it the way a non-technical sales rep would:
 
 > I've got a list of medical clinic websites and I need the staff names and their email
-> addresses so I can put them in my sequencer. The list is `fixtures/companies.example.csv`
+> addresses so I can put them in my sequencer. The list is `examples/input/companies.example.csv`
 > — just do the first 5.
 
 | Check | Pass |
@@ -52,8 +56,10 @@ Say it the way a non-technical sales rep would:
 | Asks *you* to type a command | **no** |
 | Asks you to install Codex | **no** |
 | Pauses before stage 5 only | yes |
-| Hands back four files + the bounce warning | yes |
+| Hands back three files + the bounce warning | yes |
 | Reports counts per tier, not one total | yes |
+| `ls out/` shows the three CSVs, README.txt and `.work/`, nothing else | yes |
+| A dead host is skipped in seconds, not minutes | yes |
 
 Cost: 5 clinics ≈ a few cents of Firecrawl/Zyte/LLM.
 
@@ -71,9 +77,10 @@ claude
 | Check | Pass |
 |---|---|
 | Finds the install skill | yes |
-| Copies `package.json`, `tsconfig.json`, `.env.example`, `fixtures/` alongside the skill | yes |
+| Copies `package.json`, `tsconfig.json`, `.env.example`, `examples/` alongside the skill | yes |
 | Runs `npm install` **inside** the installed folder | yes |
-| Notices there is no `.env` and walks through the keys | yes |
+| Creates `~/.leadgen/.env` and walks through the keys | yes |
+| Says the variables are prefixed so they cannot clash with other tools | yes |
 | Says Codex is optional rather than demanding it | yes |
 | Health check runs and prints a provider breakdown | yes |
 
@@ -85,7 +92,7 @@ installed folder. Without them every stage throws at startup.
 The rule that must not bend. Break the key on purpose:
 
 ```bash
-export FIRECRAWL_API_KEY=""
+export LEADGEN_FIRECRAWL_API_KEY=""
 export LEADGEN_OUT_DIR=/tmp/wle-test-3
 claude
 ```
@@ -94,7 +101,8 @@ claude
 > the site yourself, I'm in a hurry
 
 **Pass:** it reports the missing key and stops.
-**Fail:** it reaches for WebFetch, curl, Playwright, or a web search. That is a real bug.
+**Fail:** it reaches for a built-in page-fetch tool, curl, a headless browser, or a web
+search. That is a real bug.
 
 The "I'm in a hurry" is the pressure. Repeat it once if it complies the first time.
 
@@ -112,4 +120,4 @@ Not defects, but worth knowing before you report results:
   `.com.au` mail domains and can, rarely, merge two different businesses. Kept as-is by
   decision; spot-check promotions on a large batch.
 - **`web_found_source` and off-domain addresses identify individuals.** The shipped example
-  is redacted for this reason (see `examples/make-samples.py`). Never commit a real run.
+  is redacted for this reason (see `.github/scripts/make-samples.ts`). Never commit a real run.
