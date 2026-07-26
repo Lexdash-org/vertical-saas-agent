@@ -43,7 +43,7 @@ The single most important behaviour: **a prediction must never be presented as a
 - "Confirmed domain" means the domain receives mail. It does not mean the mailbox exists.
   Nothing in this pipeline checks deliverability.
 
-The full vocabulary is in `skills/website-lead-enrichment/shared/PIPELINE-STATE.md`.
+The full vocabulary is in `skills/website-lead-enrichment/references/pipeline-state.md`.
 
 ## The no-fallback rule
 

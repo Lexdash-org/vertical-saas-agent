@@ -16,7 +16,7 @@ mkdir -p ~/.leadgen && cp .env.example ~/.leadgen/.env   # then fill it in
 ```
 
 You can do useful work without any credentials: stage 6 is plain DNS, stage 8 is string
-generation, and everything in `shared/lib/` is pure.
+generation, and everything in `scripts/lib/` is pure.
 
 ## Repository layout
 
@@ -28,7 +28,8 @@ skills/
 │   │   ├── PROVIDERS.md              # the one copy of the credential contract
 │   │   ├── PIPELINE-STATE.md         # out/ file contract, basis vocabulary, ledgers
 │   │   └── lib/                      # code shared across stages, incl. patterns.json
-│   └── subskills/                    # eight stages, each SKILL.md + scripts/
+│   ├── references/                   # router prose: NN-<stage>.md, providers, pipeline-state
+│   └── scripts/                      # <stage>/ tools + lib/ shared code
 └── find-team-emails/                 # the ONLY published skill: sets up the above, then runs it
 
 .github/scripts/                      # repo tooling: validate-skills, check-invariants,
@@ -48,22 +49,26 @@ therefore **cannot run from a clone** — it lives with the tooling rather than 
 deliberately keeps nothing under `.claude/` — to use the skill while developing, install
 it into your agent's skills directory with the copy commands in the README.
 
-**`subskills/` is deliberate.** The specification names `scripts/`, `references/` and
-`assets/` as the standard optional directories, and requires only `SKILL.md`. Nested
-subskills are how this project decomposes a long pipeline, and nested `SKILL.md` files are
-not auto-discovered — which is the point. A stage should only ever run in pipeline order,
-routed to by the parent.
+**Only the directories the specification names.** `SKILL.md` is required; `scripts/`,
+`references/` and `assets/` are the standard optional ones. A long pipeline is decomposed
+into `references/NN-<stage>.md` — reference documents, not nested skills.
+
+That distinction is load-bearing. These stage docs used to be nested `SKILL.md` files, and
+`skills add --full-depth` then discovered **ten** installable skills instead of two. A user
+could install `email-permutation` alone, where it runs without the domain-priority rules
+the pipeline gives it. A stage should only ever run in pipeline order, routed to by
+`SKILL.md`.
 
 ## The conventions that matter
 
 **One source of truth for email patterns.** The 18 canonical patterns live in
-`shared/lib/patterns.json` and nowhere else. `patterns.ts` and `permute.ts` both derive
+`scripts/lib/patterns.json` and nowhere else. `patterns.ts` and `permute.ts` both derive
 their builders from it, and the model prompt builds its allowed-list from it. There used
 to be three hand-maintained copies; they drifted. Do not add a fourth.
 
 **A prediction must never be able to look like a fact.** `best_email_basis` is the whole
 honesty contract: `known` and `web-found:*` are real addresses, `learned:*` and
-`default:*` are guesses. If you add a value, document it in `shared/PIPELINE-STATE.md`,
+`default:*` are guesses. If you add a value, document it in `references/pipeline-state.md`,
 and make sure it lands in the right one of `ready-to-send.csv` /
 `verify-before-sending.csv`. A guess reaching a sequencer generates bounces and damages
 someone's sending domain.
@@ -82,7 +87,7 @@ tool. CI rejects host-specific tool names in a `SKILL.md`.
 
 **Stages are resumable and single-writer.** Each appends to a ledger and skips completed
 work on re-run. Only one stage may write `out/.work/team-master.csv` at a time. If you add a
-stage, follow both patterns — `shared/PIPELINE-STATE.md` documents the existing ledgers,
+stage, follow both patterns — `references/pipeline-state.md` documents the existing ledgers,
 including the two with surprising semantics.
 
 ## Verifying a change
@@ -100,13 +105,13 @@ Free, keyless smoke test — proves the paths and dependencies resolve:
 
 ```bash
 LEADGEN_OUT_DIR=/tmp/wle-smoke npx tsx \
-  skills/website-lead-enrichment/subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+  skills/website-lead-enrichment/scripts/resolve-email-domains/resolve-email-domains.ts \
   --input examples/input/companies.example.csv
 ```
 
 **There is no unit test suite yet**, which is the biggest gap in the project — the
 invariant checks cover a few load-bearing behaviours, not the pipeline. Contributions
-adding real tests are very welcome; start with `shared/lib/`, which is pure and has no
+adding real tests are very welcome; start with `scripts/lib/`, which is pure and has no
 I/O. `evals/trigger-cases.json` records which requests should and should
 not activate the skill; add a case there when you change a description.
 
@@ -121,7 +126,7 @@ a shell variable; the shell wins. Results otherwise land in `./out` wherever you
 ## Things that will get a PR sent back
 
 - A key, a `.env`, a real lead list, or pipeline output in the diff.
-- A new `process.env.SOMETHING` outside `shared/lib/env.ts` — CI rejects it.
+- A new `process.env.SOMETHING` outside `scripts/lib/env.ts` — CI rejects it.
 - A new copy of the pattern table, the role-inbox regex, or the CSV parser.
 - A predicted address that can surface with a `known` or `web-found` basis.
 - A network fallback added to a stage whose provider is unconfigured.

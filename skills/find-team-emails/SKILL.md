@@ -110,10 +110,10 @@ for item in $NEEDS; do
 done
 
 fail=0
-for item in SKILL.md shared/lib/paths.ts $NEEDS; do
+for item in SKILL.md scripts/lib/paths.ts $NEEDS; do
   [ -e "$DEST/$item" ] || { echo "MISSING: $item"; fail=1; }
 done
-[ "$(ls "$DEST"/subskills/*/SKILL.md 2>/dev/null | wc -l)" -eq 8 ] || { echo "MISSING: subskills"; fail=1; }
+[ "$(ls "$DEST"/references/[0-9][0-9]-*.md 2>/dev/null | wc -l)" -eq 8 ] || { echo "MISSING: stage references"; fail=1; }
 [ "$fail" -eq 0 ] || { rm -rf "$DEST"; echo "install aborted"; exit 1; }
 
 cd "$DEST" && npm install
@@ -170,7 +170,7 @@ network works, paths point where they should.
 cd "$DEST"
 export CHECK=/tmp/wle-check && rm -rf "$CHECK"
 LEADGEN_OUT_DIR=$CHECK npx tsx \
-  subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+  scripts/resolve-email-domains/resolve-email-domains.ts \
   --input examples/input/companies.example.csv
 ```
 
@@ -187,7 +187,7 @@ company,domain,website,name,title,email,email_source_url,updated_at,business_ema
 Check Co,example.com,https://example.com,Jane Doe,Director,jane.doe@example.com,https://example.com/team,2026-01-01T00:00:00Z,,,,
 Check Co,example.com,https://example.com,John Smith,Analyst,,,2026-01-01T00:00:00Z,,,,
 CSV
-LEADGEN_OUT_DIR=$CHECK npx tsx subskills/email-permutation/scripts/apply-permutation.ts
+LEADGEN_OUT_DIR=$CHECK npx tsx scripts/email-permutation/apply-permutation.ts
 ls "$CHECK"          # expect: ready-to-send.csv, verify-before-sending.csv, README.txt, .work
 ```
 

@@ -66,7 +66,7 @@ changed from.
   from every Codex child process.
 - Any OpenAI-compatible endpoint — OpenAI, OpenRouter, Together, Groq, Ollama, vLLM, and
   Azure via its `/openai/v1/` path. One provider code path, no per-vendor presets.
-- `shared/lib/env.ts` declares every variable name once; a mistyped name is a TypeScript
+- `scripts/lib/env.ts` declares every variable name once; a mistyped name is a TypeScript
   error rather than a runtime "key not set". CI rejects a hard-coded name anywhere else
   and requires `.env.example` to match the declared set exactly.
 

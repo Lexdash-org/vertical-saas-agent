@@ -28,7 +28,7 @@ Pipeline output is gitignored, so git has no copy of it — a run you overwrite 
 
 ```bash
 LEADGEN_OUT_DIR=/tmp/wle-smoke npx tsx \
-  skills/website-lead-enrichment/subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+  skills/website-lead-enrichment/scripts/resolve-email-domains/resolve-email-domains.ts \
   --input examples/input/companies.example.csv
 ```
 

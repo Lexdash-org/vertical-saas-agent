@@ -85,10 +85,10 @@ jobs:
             mkdir -p "$DEST/$(dirname "$item")"
             cp -R "$item" "$DEST/$item"
           done
-          for item in SKILL.md shared/lib/paths.ts $NEEDS; do
+          for item in SKILL.md scripts/lib/paths.ts $NEEDS; do
             [ -e "$DEST/$item" ] || { echo "MISSING: $item"; exit 1; }
           done
-          [ "$(ls "$DEST"/subskills/*/SKILL.md | wc -l)" -eq 8 ] || { echo "MISSING: subskills"; exit 1; }
+          [ "$(ls "$DEST"/references/[0-9][0-9]-*.md | wc -l)" -eq 8 ] || { echo "MISSING: stage references"; exit 1; }
           echo "DEST=$DEST" >> "$GITHUB_ENV"
 
       # Would have caught the missing .npmrc: without it this fails ERESOLVE, because
@@ -112,7 +112,7 @@ jobs:
           CHECK="$RUNNER_TEMP/wle-check"
           rm -rf "$CHECK"
           LEADGEN_OUT_DIR="$CHECK" npx tsx \
-            subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+            scripts/resolve-email-domains/resolve-email-domains.ts \
             --input examples/input/companies.example.csv
           mkdir -p "$CHECK/.work"
           cat > "$CHECK/.work/team-master.csv" <<'CSV'
@@ -120,7 +120,7 @@ jobs:
           Check Co,example.com,https://example.com,Jane Doe,Director,jane.doe@example.com,https://example.com/team,2026-01-01T00:00:00Z,,,,
           Check Co,example.com,https://example.com,John Smith,Analyst,,,2026-01-01T00:00:00Z,,,,
           CSV
-          LEADGEN_OUT_DIR="$CHECK" npx tsx subskills/email-permutation/scripts/apply-permutation.ts
+          LEADGEN_OUT_DIR="$CHECK" npx tsx scripts/email-permutation/apply-permutation.ts
           for f in ready-to-send.csv verify-before-sending.csv company-inboxes.csv README.txt; do
             [ -s "$CHECK/$f" ] || { echo "health check did not produce $f"; exit 1; }
           done

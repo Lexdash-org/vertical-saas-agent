@@ -30,7 +30,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseCsv, csvCell } from '../../skills/website-lead-enrichment/shared/lib/site.js';
+import { parseCsv, csvCell } from '../../skills/website-lead-enrichment/scripts/lib/site.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 // Both are gitignored and exist only on a maintainer's machine. Overridable so the

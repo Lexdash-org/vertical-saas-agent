@@ -10,11 +10,11 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ENV } from '../../skills/website-lead-enrichment/shared/lib/env.js';
-import { candidates } from '../../skills/website-lead-enrichment/subskills/email-permutation/scripts/permute.js';
-import { PATTERNS, displayName, firstLast } from '../../skills/website-lead-enrichment/shared/lib/patterns.js';
-import { basisToStatus } from '../../skills/website-lead-enrichment/shared/lib/basis.js';
-import { parseCsv } from '../../skills/website-lead-enrichment/shared/lib/site.js';
+import { ENV } from '../../skills/website-lead-enrichment/scripts/lib/env.js';
+import { candidates } from '../../skills/website-lead-enrichment/scripts/email-permutation/permute.js';
+import { PATTERNS, displayName, firstLast } from '../../skills/website-lead-enrichment/scripts/lib/patterns.js';
+import { basisToStatus } from '../../skills/website-lead-enrichment/scripts/lib/basis.js';
+import { parseCsv } from '../../skills/website-lead-enrichment/scripts/lib/site.js';
 
 const failures: string[] = [];
 const check = (name: string, fn: () => string): void => {

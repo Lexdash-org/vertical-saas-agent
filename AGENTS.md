@@ -32,7 +32,7 @@ Free, keyless smoke test — no credentials, no credits, DNS only:
 
 ```bash
 LEADGEN_OUT_DIR=/tmp/wle-smoke npx tsx \
-  skills/website-lead-enrichment/subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+  skills/website-lead-enrichment/scripts/resolve-email-domains/resolve-email-domains.ts \
   --input examples/input/companies.example.csv
 ```
 
@@ -42,7 +42,7 @@ LEADGEN_OUT_DIR=/tmp/wle-smoke npx tsx \
 `best_email_basis` separates real addresses (`known`, `web-found:*`) from guesses
 (`learned:*`, `default:*`), and the output files are split on it. A guess reaching a
 sequencer generates bounces and damages someone's sending domain. If you add a basis value,
-document it in `shared/PIPELINE-STATE.md` and make sure it routes to the right file — a CI
+document it in `references/pipeline-state.md` and make sure it routes to the right file — a CI
 invariant asserts only real addresses can reach `ready-to-send.csv`.
 
 **No fallbacks for a missing provider.** If a credential is absent, the stage reports it and
@@ -51,10 +51,10 @@ web search. Those produce a different, worse result that *looks* identical, so t
 cannot tell the run degraded.
 
 **One source of truth for email patterns.** The 18 canonical patterns live in
-`shared/lib/patterns.json` and nowhere else. There were once three hand-maintained copies;
+`scripts/lib/patterns.json` and nowhere else. There were once three hand-maintained copies;
 they drifted. Do not add a fourth.
 
-**`shared/lib/env.ts` is the only file that may name an environment variable.** Everything
+**`scripts/lib/env.ts` is the only file that may name an environment variable.** Everything
 else calls `readEnv('zyteKey')`. A mistyped name must be a compile error, not a runtime
 "key not set" — which is indistinguishable from a user who never configured anything. CI
 rejects a hard-coded name anywhere else.
@@ -79,17 +79,22 @@ work. Only one stage may write `out/.work/team-master.csv` at a time.
 ```text
 skills/find-team-emails/           the only published skill: sets up, then runs
 skills/website-lead-enrichment/    the pipeline it installs
-  shared/PROVIDERS.md              credentials + the no-fallback rule, stated once
-  shared/PIPELINE-STATE.md         out/ contract, basis vocabulary, ledgers
-  shared/lib/                      code shared across stages
-  subskills/                       eight stages, each SKILL.md + scripts/
+  SKILL.md                         the router — orchestration only
+  references/NN-<stage>.md         one per stage, numbered in pipeline order
+  references/providers.md          credentials + the no-fallback rule, stated once
+  references/pipeline-state.md     out/ contract, basis vocabulary, ledgers
+  scripts/<stage>/                 that stage's tools
+  scripts/lib/                     code shared across stages
 .github/scripts/                   validate-skills, check-invariants, make-samples
 evals/                             which requests should and should not fire the skill
 examples/input | examples/output   sample input, and what a run produces
 ```
 
-Nested `SKILL.md` files under `subskills/` are deliberately not auto-discovered — a stage
-should only ever run in pipeline order, routed to by the parent.
+**Only `SKILL.md`, `references/` and `scripts/` — the three directories the Agent Skills
+specification names.** Stages are reference documents, not nested skills, and that is not
+cosmetic: while the stage docs were named `SKILL.md`, `skills add --full-depth` discovered
+ten installable skills instead of two. A user could install `email-permutation` on its own,
+where it would run without the domain-priority rules the pipeline gives it.
 
 ## Testing
 
@@ -105,7 +110,7 @@ Credentials live in `~/.leadgen/.env`, not in the repo. Results default to `./ou
 whatever directory the user runs from.
 
 There is no unit test suite — that is the project's biggest gap, and contributions adding
-one are welcome. Start with `shared/lib/`, which is pure and has no I/O.
+one are welcome. Start with `scripts/lib/`, which is pure and has no I/O.
 
 If your change affects how the *agent* behaves rather than what the code computes, run the
 matching scenario in [TESTING.md](TESTING.md) and say what happened. That is the only way

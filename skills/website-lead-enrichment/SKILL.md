@@ -26,10 +26,10 @@ read the subskill before running that stage.
 
 ## Before you start
 
-1. Read `shared/PROVIDERS.md` — which credentials each stage needs, and the rule that a
+1. Read `references/providers.md` — which credentials each stage needs, and the rule that a
    missing credential is reported rather than worked around with curl, your own browsing,
    Playwright, or a search engine.
-2. Read `shared/PIPELINE-STATE.md` — the master CSV schema, the basis vocabulary, ledgers
+2. Read `references/pipeline-state.md` — the master CSV schema, the basis vocabulary, ledgers
    and resume, and the rule that **no two master-writing stages run at once**.
 3. Check the keys and report every missing one together, not one stage at a time.
 4. Confirm you have the input CSV path and which column holds the website.
@@ -69,7 +69,7 @@ before running it — or skip it outright when Codex isn't installed.
 
 **Codex is not required.** If the Codex CLI isn't present, or the user doesn't want to
 spend the quota, skip stage 5 and continue at stage 6. Do not ask them to install it, and
-do not substitute your own web search for it — see `shared/PROVIDERS.md` for why.
+do not substitute your own web search for it — see `references/providers.md` for why.
 
 Skipping costs only the off-domain addresses (a clinician's `@hospital.org.au` from a
 paper or staff register). Everything the companies publish themselves, and every
@@ -84,17 +84,17 @@ root, passing the user's CSV — there is no default input list.
 
 | # | Stage | Subskill — read before running | Tool |
 |---|---|---|---|
-| 1 | Discover and rank team pages | `subskills/discover-team-pages/SKILL.md` | `scripts/rank-batch.ts --input <csv>` |
-| 2 | Scrape and extract people | `subskills/extract-team-members/SKILL.md` | `scripts/run-batch.ts --input <csv>` |
-| 3 | Harvest business emails | `subskills/harvest-business-emails/SKILL.md` | `scripts/harvest-business-emails.ts --input <csv>` |
-| 4 | Recover related / cross-domain | `subskills/recover-related-emails/SKILL.md` | `scripts/harvest-related.ts --input <csv>` |
-| 5 | Discover on the open web *(optional)* | `subskills/discover-web-emails/SKILL.md` | `scripts/enrich-web-search.ts --source-csv <csv>` |
-| 6 | Resolve receiving mail domains | `subskills/resolve-email-domains/SKILL.md` | `scripts/resolve-email-domains.ts --input <csv>` |
-| 7 | Learn each company's format | `subskills/learn-email-patterns/SKILL.md` | `scripts/learn-email-patterns.ts` |
-| 8 | Permute and pick best_email | `subskills/email-permutation/SKILL.md` | `scripts/apply-permutation.ts` |
+| 1 | Discover and rank team pages | `references/01-discover-team-pages.md` | `scripts/rank-batch.ts --input <csv>` |
+| 2 | Scrape and extract people | `references/02-extract-team-members.md` | `scripts/run-batch.ts --input <csv>` |
+| 3 | Harvest business emails | `references/03-harvest-business-emails.md` | `scripts/harvest-business-emails.ts --input <csv>` |
+| 4 | Recover related / cross-domain | `references/04-recover-related-emails.md` | `scripts/harvest-related.ts --input <csv>` |
+| 5 | Discover on the open web *(optional)* | `references/05-discover-web-emails.md` | `scripts/enrich-web-search.ts --source-csv <csv>` |
+| 6 | Resolve receiving mail domains | `references/06-resolve-email-domains.md` | `scripts/resolve-email-domains.ts --input <csv>` |
+| 7 | Learn each company's format | `references/07-learn-email-patterns.md` | `scripts/learn-email-patterns.ts` |
+| 8 | Permute and pick best_email | `references/08-email-permutation.md` | `scripts/apply-permutation.ts` |
 
 Each tool lives under its own subskill, e.g.
-`subskills/harvest-business-emails/scripts/harvest-business-emails.ts`.
+`scripts/harvest-business-emails/harvest-business-emails.ts`.
 
 Stages 1–5 collect **real** addresses. Stages 6–8 **predict** the remainder; they need no
 API keys and are cheap, so re-run them freely.
@@ -176,7 +176,7 @@ Report the counts per tier, not one total. Then say this plainly, every time:
 **Never present a prediction as a fact.** Scraped and sourced addresses are real; anything
 with a `learned:` or `default:` basis is a guess until an SMTP/catch-all pass confirms it.
 Deliverability is `not_checked` for every row this pipeline produces. The full basis
-vocabulary is in `shared/PIPELINE-STATE.md`.
+vocabulary is in `references/pipeline-state.md`.
 
 Expect from a real run: roughly 16% of any scraped list is dead domains no tool can help,
 and many live businesses publish only a generic inbox or a web form. Capture the inbox

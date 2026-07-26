@@ -232,7 +232,7 @@ silently switches Claude Code and Codex from the subscription you pay for to API
 This project never reads either one — and keep `OPENAI_API_KEY` unset, because every Codex
 spawn strips it so Codex uses your ChatGPT subscription.
 
-Full contract: `skills/website-lead-enrichment/shared/PROVIDERS.md`.
+Full contract: `skills/website-lead-enrichment/references/providers.md`.
 
 ## How to run tests
 
@@ -256,7 +256,7 @@ A free, keyless smoke test that exercises the install, dependencies and path res
 
 ```bash
 LEADGEN_OUT_DIR=/tmp/wle-smoke npx tsx \
-  skills/website-lead-enrichment/subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+  skills/website-lead-enrichment/scripts/resolve-email-domains/resolve-email-domains.ts \
   --input examples/input/companies.example.csv
 ```
 
@@ -264,7 +264,7 @@ A provider breakdown means it works. Manual end-to-end scenarios — including t
 new-user install and a "does it refuse unsafe fallbacks" check — are in
 [TESTING.md](TESTING.md).
 
-Contributions adding real tests are very welcome; start with `shared/lib/`, which is pure
+Contributions adding real tests are very welcome; start with `scripts/lib/`, which is pure
 and has no I/O.
 
 ## Data and privacy
