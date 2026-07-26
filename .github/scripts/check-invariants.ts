@@ -259,6 +259,25 @@ check('example CSV contains no predictions', () => {
  * were wrong by more than an order of magnitude; a user sizing a batch from it ran out
  * mid-run. Report the live percentage instead, and let the user pick the batch size.
  */
+/**
+ * The role-inbox vocabulary lives in `lib/emails.ts` and nowhere else.
+ *
+ * CLAUDE.md already forbade a second copy; nothing enforced it, and four appeared. They
+ * drifted exactly as the pattern table once did: `reception1@` matched in stage 3 and not
+ * in stage 4, so one address was a company's primary inbox to one stage and an ordinary
+ * address to the next. A rule this specific should fail a build, not a review.
+ */
+check('one role-inbox vocabulary', () => {
+  const home = 'skills/website-lead-enrichment/scripts/lib/emails.ts';
+  const offenders = walk('skills')
+    .filter((f) => f !== home)
+    .filter((f) => /\/\^?\(\?:?info\||\binfo\|reception\b/.test(fs.readFileSync(f, 'utf8')));
+  if (offenders.length) {
+    throw new Error(`role-inbox regex outside ${home}: ${offenders.join(', ')}`);
+  }
+  return `declared once, in ${home.split('/').pop()}`;
+});
+
 check('no invented Codex quota rate', () => {
   const rate = /\d+\s*%[^.]{0,40}\bper\b[^.]{0,30}\bsearch(es)?\b/i;
   // Whitespace is collapsed before matching, so a line break cannot hide the claim — a

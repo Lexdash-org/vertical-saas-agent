@@ -49,9 +49,10 @@ stops. It does not reach for `curl`, a headless browser, the agent's own fetch t
 web search. Those produce a different, worse result that *looks* identical, so the user
 cannot tell the run degraded.
 
-**One source of truth for email patterns.** The 18 canonical patterns live in
-`scripts/lib/patterns.json` and nowhere else. There were once three hand-maintained copies;
-they drifted. Do not add a fourth.
+**One source of truth for email patterns, and for the role-inbox vocabulary.** The 18
+canonical patterns live in `scripts/lib/patterns.json`; the `info@`/`reception@` tests live in
+`scripts/lib/emails.ts`. Both had hand-maintained copies once, and both drifted — `reception1@`
+was a role inbox to stage 3 and an ordinary address to stage 4. CI now fails on a second copy.
 
 **`scripts/lib/env.ts` is the only file that may name an environment variable.** Everything
 else calls `readEnv('zyteKey')`. A mistyped name must be a compile error, not a runtime

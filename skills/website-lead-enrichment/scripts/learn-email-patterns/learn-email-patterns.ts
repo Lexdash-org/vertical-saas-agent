@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import pLimit from 'p-limit';
+import { ROLE_LOCALPART as ROLE } from '../lib/emails.js';
 import { llmClient, reasoningModel } from '../lib/llm.js';
 import { firstLast, buildEmail, isValidTemplate, PATTERNS } from '../lib/patterns.js';
 import { ledgerPath, loadEnv, readMaster, workPath } from '../lib/paths.js';
@@ -29,7 +30,6 @@ const CONCURRENCY = Number(argVal('--concurrency') ?? 8);
 const DOMAIN_CACHE = ledgerPath('email-domain-cache.jsonl');
 const OUT_JSON = workPath('company-email-patterns.json');
 
-const ROLE =/^(info|reception|admin|contact|enquir|office|hello|mail|practice|booking|appointment|referral|account|hr|careers?|frontdesk|desk|clinic|rooms|secretary|welcome|team|support|general|no-?reply|feedback|sales|marketing|patients?|appts|webmaster|manager|education|doctor|nurse)/i;
 
 interface LearnedPattern { pattern: string; confidence: 'deterministic' | 'ai'; source: string; evidence: string[] }
 

@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import pLimit from 'p-limit';
+import { FREEMAIL, PLACEHOLDER, ROLE, VENDOR } from '../lib/emails.js';
 import { csvCell, normalizeWebsite, parseCsv } from '../lib/site.js';
 import { EmailSources, fetchPage } from '../lib/scrape.js';
 import { MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../lib/paths.js';
@@ -37,12 +38,6 @@ const MERGE_ONLY = process.argv.includes('--merge');
 
 const LEDGER = ledgerPath('business-email-ledger.jsonl');
 const BIZ_CSV = workPath('business-emails.csv');
-
-// Third-party vendors / SaaS whose addresses are NOT the clinic's own.
-const VENDOR = /@(?:.*\.)?(?:myhealth1st|healthengine|hotdoc|automedsystems|cliniko|marketingsweet|wixpress|sentry|squarespace|godaddy|wordpress|shopify|mailchimp|hubspot|constantcontact|godaddy|example|schema|w3|sentry-next|mhtml|blink)\b/i;
-const PLACEHOLDER = /^(?:user|test|name|email|yourname|firstname|your)@|@(?:domain|email|yourdomain|company|website)\.(?:com|net)$/i;
-const ROLE = /^(?:info|reception|admin|contact|enquir(?:y|ies)|office|hello|mail|practice|booking(?:s)?|appointment(?:s)?|referral(?:s)?|account(?:s)?|hr|careers?|frontdesk|desk|clinic|rooms|secretary|pa|reception1|welcome|hello|team|support|general)@/i;
-const FREEMAIL = /@(?:gmail|outlook|hotmail|yahoo|bigpond|live|icloud|me|optusnet|iinet|internode)\.[a-z.]+$/i;
 
 interface Harvest {
   domain: string;
