@@ -1,9 +1,8 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../../../shared/lib/site.js';
-import { fetchPage } from '../../../shared/lib/scrape.js';
-import { OUT_DIR, loadEnv, MASTER_CSV } from '../../../shared/lib/paths.js';
+import { EmailSources, fetchPage } from '../../../shared/lib/scrape.js';
+import { MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../../../shared/lib/paths.js';
 import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js';
 
 /**
@@ -36,8 +35,8 @@ const CONCURRENCY = Number(argVal('--concurrency') ?? 6);
 const FORCE = process.argv.includes('--force');
 const MERGE_ONLY = process.argv.includes('--merge');
 
-const LEDGER = path.join(OUT_DIR, 'business-email-ledger.jsonl');
-const BIZ_CSV = path.join(OUT_DIR, 'business-emails.csv');
+const LEDGER = ledgerPath('business-email-ledger.jsonl');
+const BIZ_CSV = workPath('business-emails.csv');
 
 // Third-party vendors / SaaS whose addresses are NOT the clinic's own.
 const VENDOR = /@(?:.*\.)?(?:myhealth1st|healthengine|hotdoc|automedsystems|cliniko|marketingsweet|wixpress|sentry|squarespace|godaddy|wordpress|shopify|mailchimp|hubspot|constantcontact|godaddy|example|schema|w3|sentry-next|mhtml|blink)\b/i;
@@ -51,6 +50,8 @@ interface Harvest {
   website: string;
   businessEmails: string[]; // role/same-domain — the strong business signal
   otherEmails: string[]; // freemail contact addresses that look business-ish
+  /** The page the leading business email was found on — proof, shipped beside it. */
+  businessEmailSourceUrl?: string;
   pages: number;
   error?: string;
 }
@@ -89,10 +90,10 @@ async function harvest(target: { key: string; company: string; original: string 
   try {
     const origin = new URL(target.original);
     const home = `${origin.protocol}//${origin.host}/`;
-    const emails = new Set<string>();
+    const emails = new EmailSources();
     const homePage = await fetchPage(home);
     out.pages += 1;
-    homePage.emails.forEach((e) => emails.add(e));
+    emails.add(homePage.emails, home);
 
     // Find contact-ish links on the homepage; else guess common paths.
     const contactLinks = homePage.links
@@ -105,14 +106,15 @@ async function harvest(target: { key: string; company: string; original: string 
       try {
         const page = await fetchPage(url);
         out.pages += 1;
-        page.emails.forEach((e) => emails.add(e));
+        emails.add(page.emails, url);
       } catch {
         /* contact-page guess may 404 — fine */
       }
     }
-    const { business, other } = classify([...emails], target.key);
+    const { business, other } = classify(emails.emails(), target.key);
     out.businessEmails = business;
     out.otherEmails = other;
+    out.businessEmailSourceUrl = business[0] ? emails.sourceOf(business[0]) : '';
   } catch (err) {
     out.error = err instanceof Error ? err.message : String(err);
   }
@@ -172,9 +174,10 @@ function mergeIntoMaster(map: Map<string, Harvest>): number {
   if (!fs.existsSync(MASTER_CSV)) return 0;
   const { header, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));
   const domIdx = header.indexOf('domain');
-  const keep = header.filter((h) => h !== 'business_email' && h !== 'all_business_emails');
+  const derived = new Set(['business_email', 'all_business_emails', 'business_email_source_url']);
+  const keep = header.filter((h) => !derived.has(h));
   const keepIdx = keep.map((h) => header.indexOf(h));
-  const outHeader = [...keep, 'business_email', 'all_business_emails'];
+  const outHeader = [...keep, 'business_email', 'all_business_emails', 'business_email_source_url'];
   const lines = [outHeader.join(',')];
   let filled = 0;
   for (const r of rows) {
@@ -182,12 +185,11 @@ function mergeIntoMaster(map: Map<string, Harvest>): number {
     const h = map.get(dom);
     const biz = h?.businessEmails[0] ?? '';
     const all = h?.businessEmails.join('; ') ?? '';
+    const src = biz ? h?.businessEmailSourceUrl ?? '' : '';
     if (biz) filled += 1;
-    lines.push([...keepIdx.map((i) => r[i] ?? ''), biz, all].map(csvCell).join(','));
+    lines.push([...keepIdx.map((i) => r[i] ?? ''), biz, all, src].map(csvCell).join(','));
   }
-  const tmp = `${MASTER_CSV}.tmp`;
-  fs.writeFileSync(tmp, lines.join('\n') + '\n');
-  fs.renameSync(tmp, MASTER_CSV);
+  writeAtomic(MASTER_CSV, lines.join('\n') + '\n');
   return filled;
 }
 

@@ -1,6 +1,9 @@
 ---
 name: discover-team-pages
 description: Use when a company website must be reduced to the real directory and profile URLs most likely to name its employees, staff, clinicians, partners, leaders, or other team members before any page scraping begins.
+license: MIT
+metadata:
+  author: Lexdash-org
 ---
 
 # Discover Team Pages
@@ -17,7 +20,7 @@ the open web, find emails, or generate email candidates.
 ## Required inputs
 
 - Website or domain; company name is optional ranking context.
-- `FIRECRAWL_API_KEY` for URL mapping, and the LLM reasoning role for ranking.
+- `LEADGEN_FIRECRAWL_API_KEY` for URL mapping, and the LLM reasoning role for ranking.
 
 Credentials and the no-fallback rule are defined once in `../../shared/PROVIDERS.md`.
 Batch runs additionally require `--input <csv>`; there is no default list.
@@ -43,6 +46,21 @@ or lower `--map-limit` for that domain. If it still times out, record it as a di
 miss and move on: the company can still yield a business inbox at stage 3. Never
 substitute your own browsing to guess its team page.
 
+### Every mapping failure gets a liveness check
+
+A map can fail for two unrelated reasons: the site is large or slow, or the host is
+simply gone. On any failure the stage issues **one plain HTTP request** to the origin and
+records `siteDown: true` when nothing answers within 10s.
+
+That flag is what lets stage 2 skip a dead host in milliseconds instead of spending its
+whole per-site budget rediscovering the same thing expensively. Any HTTP status counts as
+alive — a 403 or 503 means a server is there, and Zyte may well get through where a bare
+request cannot. Only DNS failure, a refused connection, or a timeout count as down.
+
+This is **not** a scraping fallback and does not weaken the no-fallback rule: nothing
+reads, parses, or extracts from the response. It only decides whether the site is worth
+spending provider credits on.
+
 Tools in `scripts/`: `teamPages.ts` is the module boundary (`findTeamPages`),
 `rank-batch.ts` runs a resumable CSV batch, `rank-one.ts` handles a single site, and
 `shortlist.ts` re-filters an existing ranking without re-mapping. Callers own file I/O.
@@ -55,6 +73,9 @@ Return `website`, `origin`, `domain`, `company`, `pages`, `profilePages`,
 `profilePrefixes`, `allCandidates`, `mappedCount`, `rankedCount`, `mapMs`, and `rankMs`.
 Every returned URL must originate from Firecrawl's map or the supplied website. An empty
 shortlist is valid; never invent a conventional `/team` URL.
+
+Failed sites additionally record `error`, and `siteDown` when the liveness check found
+nothing answering.
 
 ## Handoff
 

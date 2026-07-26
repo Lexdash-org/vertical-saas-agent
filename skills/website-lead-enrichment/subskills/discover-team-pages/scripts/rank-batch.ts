@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pLimit from 'p-limit';
-import { csvCell, normalizeWebsite, parseCsv, type SiteRankRecord, type SiteTarget } from '../../../shared/lib/site.js';
+import { csvCell, isSiteReachable, normalizeWebsite, parseCsv, type SiteRankRecord, type SiteTarget } from '../../../shared/lib/site.js';
 import { findTeamPages } from './teamPages.js';
 import { clientsFromEnv } from '../../../shared/lib/llm.js';
-import { OUT_DIR, loadEnv } from '../../../shared/lib/paths.js';
+import { ledgerPath, loadEnv, workPath } from '../../../shared/lib/paths.js';
 import { argVal, hasFlag, requireInput, requireColumn } from '../../../shared/lib/cli.js';
 
 /**
@@ -38,8 +38,8 @@ const SITE_LIMIT = argVal('--limit') ? Number(argVal('--limit')) : Infinity;
 const ONLY = (argVal('--only') ?? '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
 const FORCE = hasFlag('--force');
 
-const JSONL = path.join(OUT_DIR, 'team-page-rank.jsonl');
-const OUT_CSV = path.join(OUT_DIR, 'team-page-candidates.csv');
+const JSONL = ledgerPath('team-page-rank.jsonl');
+const OUT_CSV = workPath('team-page-candidates.csv');
 
 function loadTargets(): SiteTarget[] {
   const { header, rows } = parseCsv(fs.readFileSync(INPUT_CSV, 'utf8'));
@@ -158,7 +158,12 @@ async function main(): Promise<void> {
           );
         } catch (err) {
           rec.error = err instanceof Error ? err.message : String(err);
-          console.error(`✗ ${target.key} — ${rec.error}`);
+          // Mapping failing can mean two very different things: a big or slow site that
+          // Firecrawl gave up on, or a host that is simply gone. One plain request tells
+          // them apart for free, and stage 2 skips the dead ones instead of spending its
+          // whole per-site budget discovering the same thing the expensive way.
+          rec.siteDown = !(await isSiteReachable(target.origin));
+          console.error(`✗ ${target.key} — ${rec.error}${rec.siteDown ? ' [host unreachable — will be skipped]' : ''}`);
         }
         rec.finishedAt = new Date().toISOString();
         fs.appendFileSync(JSONL, JSON.stringify(rec) + '\n');

@@ -23,7 +23,17 @@ if (!codex.bin) {
 
 console.error(describeCodex(codex));
 
-const proc = spawn(codex.bin, ['app-server', '--stdio'], { stdio: ['pipe', 'pipe', 'inherit'] });
+// Same environment surgery as the runner: with OPENAI_API_KEY set, Codex authenticates as
+// an API user instead of using the ChatGPT subscription — so this would report the rate
+// limits of an account the actual run never touches. This was the one Codex spawn that
+// inherited the variable, and it is the one preflight calls.
+const codexEnv = { ...process.env };
+delete codexEnv.OPENAI_API_KEY;
+
+const proc = spawn(codex.bin, ['app-server', '--stdio'], {
+  env: codexEnv,
+  stdio: ['pipe', 'pipe', 'inherit'],
+});
 const lines = readline.createInterface({ input: proc.stdout });
 const replies = new Map<number, { error?: unknown; result?: unknown }>();
 

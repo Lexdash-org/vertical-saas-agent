@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { buildTeamExtractor, lunaClient, organizePeople } from './agent.js';
 import { extractionModel } from '../../../shared/lib/llm.js';
-import { OUT_DIR, loadEnv } from '../../../shared/lib/paths.js';
+import { readEnv } from '../../../shared/lib/env.js';
+import { COMPANIES_DIR, ensureDirs, loadEnv } from '../../../shared/lib/paths.js';
 
 /**
  * Website in -> [{name, title, email}] out.
@@ -11,11 +12,11 @@ import { OUT_DIR, loadEnv } from '../../../shared/lib/paths.js';
  *   npx tsx scripts/run-one.ts https://example.com
  *   npx tsx subskills/extract-team-members/scripts/run-one.ts example.com [--json]   (--json = print ONLY the array)
  *
- * Writes the array to out/<host>.json as well.
+ * Writes the array to out/.work/companies/<host>.json as well.
  */
 
-// override:true — the repo .env is authoritative; a stale ZYTE_API_KEY exported
-// in ~/.zshrc (suspended account) otherwise shadows the valid key.
+// ~/.leadgen/.env is authoritative: it is loaded with override:true, so a stale key
+// exported in ~/.zshrc cannot shadow the valid one. See shared/lib/paths.ts.
 loadEnv();
 
 const args = process.argv.slice(2).filter((a) => a !== '--json');
@@ -35,7 +36,7 @@ async function main(): Promise<void> {
     `Extract the team members of the organization at ${website}`,
     { maxSteps: 16 },
   );
-  if (process.env.TEAM_EXTRACT_DEBUG) {
+  if (readEnv('debug')) {
     for (const [i, step] of (result.steps ?? []).entries()) {
       const calls = (step.toolCalls ?? [])
         .map((c: { payload?: { toolName?: string; args?: unknown } }) =>
@@ -50,9 +51,8 @@ async function main(): Promise<void> {
   const people = await organizePeople(lunaClient(), luna, session.rawPeople);
 
   const host = new URL(website).hostname.replace(/^www\./i, '');
-  const outDir = OUT_DIR;
-  fs.mkdirSync(outDir, { recursive: true });
-  const outFile = path.join(outDir, `${host}.json`);
+  ensureDirs();
+  const outFile = path.join(COMPANIES_DIR, `${host}.json`);
   fs.writeFileSync(outFile, JSON.stringify(people, null, 2) + '\n');
 
   if (jsonOnly) {

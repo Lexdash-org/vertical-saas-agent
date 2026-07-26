@@ -1,9 +1,8 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import pLimit from 'p-limit';
 import { normalizeWebsite, parseCsv, csvCell } from '../../../shared/lib/site.js';
-import { fetchPage } from '../../../shared/lib/scrape.js';
-import { OUT_DIR, loadEnv, MASTER_CSV } from '../../../shared/lib/paths.js';
+import { EmailSources, fetchPage } from '../../../shared/lib/scrape.js';
+import { MASTER_CSV, ledgerPath, loadEnv, writeAtomic } from '../../../shared/lib/paths.js';
 import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js';
 
 /**
@@ -34,8 +33,8 @@ const CONCURRENCY = Number(argVal('--concurrency') ?? 8);
 const FORCE = process.argv.includes('--force');
 const MERGE_ONLY = process.argv.includes('--merge');
 
-const STATIC_LEDGER = path.join(OUT_DIR, 'business-email-ledger.jsonl');
-const REL_LEDGER = path.join(OUT_DIR, 'related-email-ledger.jsonl');
+const STATIC_LEDGER = ledgerPath('business-email-ledger.jsonl');
+const REL_LEDGER = ledgerPath('related-email-ledger.jsonl');
 
 const VENDOR = /@(?:.*\.)?(?:myhealth1st|healthengine|hotdoc|automedsystems|cliniko|marketingsweet|wixpress|sentry|squarespace|godaddy|wordpress|shopify|mailchimp|hubspot|constantcontact|example|schema|w3|sentry-next|mhtml|blink)\b/i;
 const PLACEHOLDER = /^(?:user|test|name|email|yourname|firstname|your)@|@(?:domain|email|yourdomain|company|website)\.(?:com|net)$/i;
@@ -47,6 +46,9 @@ interface Rec {
   website: string;
   ownEmails: string[];
   relatedEmails: string[];
+  /** email -> the page it was found on. Optional: ledger lines written before this
+   *  existed simply yield blank proof rather than breaking a re-read. */
+  sources?: Record<string, string>;
   pages: number;
   error?: string;
 }
@@ -80,10 +82,11 @@ async function harvest(t: { key: string; company: string; original: string }): P
   const out: Rec = { domain: t.key, company: t.company, website: t.original, ownEmails: [], relatedEmails: [], pages: 0 };
   try {
     const o = new URL(t.original);
-    const emails = new Set<string>();
-    const home = await fetchPage(`${o.protocol}//${o.host}/`);
+    const emails = new EmailSources();
+    const homeUrl = `${o.protocol}//${o.host}/`;
+    const home = await fetchPage(homeUrl);
     out.pages += 1;
-    home.emails.forEach((e) => emails.add(e));
+    emails.add(home.emails, homeUrl);
     const contact = home.links
       .filter((l) => /contact|reach|get-in-touch|enquir/i.test(l.url) || /contact|reach|enquir/i.test(l.text))
       .map((l) => l.url);
@@ -92,14 +95,15 @@ async function harvest(t: { key: string; company: string; original: string }): P
       try {
         const p = await fetchPage(url);
         out.pages += 1;
-        p.emails.forEach((e) => emails.add(e));
+        emails.add(p.emails, url);
       } catch {
         /* 404 guess */
       }
     }
-    const { own, related } = tier([...emails], t.key);
+    const { own, related } = tier(emails.emails(), t.key);
     out.ownEmails = own;
     out.relatedEmails = related;
+    out.sources = emails.sourceMap([...own, ...related]);
   } catch (err) {
     out.error = err instanceof Error ? err.message : String(err);
   }
@@ -184,9 +188,7 @@ function merge(): { own: number; related: number } {
     }
     lines.push(out.map((_, i) => csvCell(row[i] ?? '')).join(','));
   }
-  const tmp = `${MASTER_CSV}.tmp`;
-  fs.writeFileSync(tmp, lines.join('\n') + '\n');
-  fs.renameSync(tmp, MASTER_CSV);
+  writeAtomic(MASTER_CSV, lines.join('\n') + '\n');
   return { own: ownFilled, related: relFilled };
 }
 

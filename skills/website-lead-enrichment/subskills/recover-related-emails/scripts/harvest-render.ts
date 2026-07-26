@@ -1,9 +1,8 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import pLimit from 'p-limit';
 import { normalizeWebsite, parseCsv, csvCell } from '../../../shared/lib/site.js';
 import { fetchPage } from '../../../shared/lib/scrape.js';
-import { OUT_DIR, loadEnv, MASTER_CSV } from '../../../shared/lib/paths.js';
+import { MASTER_CSV, ledgerPath, loadEnv, writeAtomic } from '../../../shared/lib/paths.js';
 import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js';
 
 /**
@@ -33,8 +32,8 @@ const CONCURRENCY = Number(argVal('--concurrency') ?? 6);
 const FORCE = process.argv.includes('--force');
 const MERGE_ONLY = process.argv.includes('--merge');
 
-const STATIC_LEDGER = path.join(OUT_DIR, 'business-email-ledger.jsonl');
-const RENDER_LEDGER = path.join(OUT_DIR, 'render-email-ledger.jsonl');
+const STATIC_LEDGER = ledgerPath('business-email-ledger.jsonl');
+const RENDER_LEDGER = ledgerPath('render-email-ledger.jsonl');
 
 const VENDOR = /@(?:.*\.)?(?:myhealth1st|healthengine|hotdoc|automedsystems|cliniko|marketingsweet|wixpress|sentry|squarespace|godaddy|wordpress|shopify|mailchimp|hubspot|constantcontact|example|schema|w3|sentry-next|mhtml|blink)\b/i;
 const PLACEHOLDER = /^(?:user|test|name|email|yourname|firstname|your)@|@(?:domain|email|yourdomain|company|website)\.(?:com|net)$/i;
@@ -167,9 +166,7 @@ function merge(): { filled: number; domains: number } {
     }
     lines.push(header.map((_, i) => csvCell(r[i] ?? '')).join(','));
   }
-  const tmp = `${MASTER_CSV}.tmp`;
-  fs.writeFileSync(tmp, lines.join('\n') + '\n');
-  fs.renameSync(tmp, MASTER_CSV);
+  writeAtomic(MASTER_CSV, lines.join('\n') + '\n');
   return { filled, domains: found.size };
 }
 

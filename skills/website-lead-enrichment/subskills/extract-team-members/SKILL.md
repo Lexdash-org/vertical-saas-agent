@@ -1,6 +1,9 @@
 ---
 name: extract-team-members
 description: Use when verified team-directory and individual-profile URLs must be scraped to extract the organization's people, job titles, and publicly displayed personal emails before company-email harvesting or prediction.
+license: MIT
+metadata:
+  author: Lexdash-org
 ---
 
 # Extract Team Members
@@ -17,20 +20,33 @@ up MX records, or generate email candidates.
 ## Required inputs
 
 - `website`, `company`, `pages`, `profilePages`, and `profilePrefixes` from Stage 1.
-- `ZYTE_API_KEY` for every page fetch, plus the LLM reasoning and extraction roles.
+- `LEADGEN_ZYTE_API_KEY` for every page fetch, plus the LLM reasoning and extraction roles.
 
 Credentials and the no-fallback rule are defined once in `../../shared/PROVIDERS.md`.
 Batch runs additionally require `--input <csv>`; there is no default list.
 
 ## Reuses stage 1 — do not re-map
 
-When `out/team-page-rank.jsonl` holds a clean record for a domain, this stage loads the
-shortlist from it instead of calling Firecrawl and the ranking model again. Only domains
-missing from that ledger, or recorded with an error, get mapped here.
+When `out/.work/ledgers/team-page-rank.jsonl` holds a clean record for a domain, this stage
+loads the shortlist from it instead of calling Firecrawl and the ranking model again. Only
+domains **missing** from that ledger get mapped here.
 
 That matters for cost: without it, running stage 1 then stage 2 pays for the same
 Firecrawl map and the same LLM ranking twice on every company. `--remap` forces a fresh
 map when a site has genuinely changed.
+
+### A domain stage 1 already failed on is not re-mapped
+
+A record carrying an `error` means mapping has been attempted and failed. Repeating it
+here just pays the same timeout for the same answer — roughly 200s per failed site. Those
+domains skip straight to unseeded exploration from the homepage.
+
+When stage 1 also recorded `siteDown: true`, the host answered nothing at all and this
+stage **skips the company outright**, in milliseconds and with no network calls. This is
+the single biggest time sink the pipeline had: one unreachable clinic burned 617s — 47% of
+a 25-company run — re-mapping and then thrashing against the site cap to extract nothing.
+The company still reaches the master via stage 3, and `--remap` re-tests a site that may
+have come back.
 
 ## Workflow
 
@@ -56,9 +72,11 @@ map when a site has genuinely changed.
    the lossy final LLM organization pass and sort deterministically.
 
 Tools in `scripts/`: `agent.ts` builds the extractor, `run-batch.ts` runs a resumable CSV
-batch, `run-one.ts` handles a single site. Cap one company at `420s`; preserve any people
-extracted before timeout. This is the only stage that takes `out/.batch.lock` — see
-`../../shared/PIPELINE-STATE.md` for why no two master-writing stages may run at once.
+batch, `run-one.ts` handles a single site. Cap one company at `240s` (`--site-timeout-ms`)
+and preserve any people extracted before the cap; run `6` companies at a time
+(`--concurrency`), since each is mostly waiting on network. This is the only stage that
+takes `out/.work/.batch.lock` — see `../../shared/PIPELINE-STATE.md` for why no two
+master-writing stages may run at once.
 
 ## Output and handoff
 

@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { z } from 'zod';
 import type { Firecrawl } from 'firecrawl';
 import type OpenAI from 'openai';
@@ -57,6 +58,59 @@ export interface SiteRankRecord {
   rankMs: number;
   finishedAt: string;
   error?: string;
+  /**
+   * Set only when mapping failed AND a plain HTTP request could not reach the host.
+   * Downstream stages skip these outright instead of spending an extraction budget on
+   * a site that cannot answer. Absent means "not checked" or "host answered".
+   */
+  siteDown?: boolean;
+}
+
+/**
+ * Is the host answering at all? Used only to decide whether a site is worth a scrape
+ * budget after its URL map failed.
+ *
+ * This is a plain `fetch`, not a Zyte fetch, and that is deliberate rather than a
+ * fallback: nothing here reads, parses or extracts from the response. It looks at
+ * whether bytes came back at all. Any HTTP status counts as alive — a 403 or 503 means
+ * a server is there, and Zyte may well get through where a bare request does not. Only
+ * DNS failure, connection refused, or a timeout count as down.
+ */
+/**
+ * Domains stage 1 proved unreachable, read from its ledger.
+ *
+ * A dead website is not a dead company — `scheart.com.au` serves nothing yet has live
+ * Microsoft 365 MX records. So this gates only the stages that FETCH PAGES (2, 3, 4);
+ * DNS and prediction still run, because mail routinely outlives a website.
+ *
+ * Sniffed rather than parsed: a rank record carries every ranked candidate URL, so
+ * JSON.parse over a thousand of them costs far more memory than this needs.
+ */
+export function unreachableDomains(rankLedgerFile: string): Set<string> {
+  const down = new Set<string>();
+  if (!fs.existsSync(rankLedgerFile)) return down;
+  for (const line of fs.readFileSync(rankLedgerFile, 'utf8').split('\n')) {
+    if (!line.includes('"siteDown":true')) continue;
+    const m = /"key"\s*:\s*"([^"]+)"/.exec(line);
+    if (m) down.add(m[1]);
+  }
+  return down;
+}
+
+export async function isSiteReachable(url: string, timeoutMs = 10_000): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'user-agent': 'Mozilla/5.0 (compatible; website-lead-enrichment/1.0)' },
+    });
+    // Drain rather than parse — leaving the body open keeps the socket alive.
+    await res.arrayBuffer().catch(() => undefined);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Minimal RFC-4180-ish CSV parser (quotes, escaped quotes, CRLF, BOM). */

@@ -1,6 +1,9 @@
 ---
 name: recover-related-emails
 description: Use when companies still have no published inbox after same-domain harvesting, and addresses on a variant domain, a parent group, or a business-name freemail account are the remaining source of a real contact.
+license: MIT
+metadata:
+  author: Lexdash-org
 ---
 
 # Recover Related and Cross-Domain Emails
@@ -17,9 +20,9 @@ generate candidate addresses.
 
 ## Required inputs
 
-- `ZYTE_API_KEY`. See `../../shared/PROVIDERS.md` for the credential and no-fallback rules.
+- `LEADGEN_ZYTE_API_KEY`. See `../../shared/PROVIDERS.md` for the credential and no-fallback rules.
 - `--input <csv>` — the company list. **Required**; there is no default.
-- `out/team-master.csv` and `out/business-email-ledger.jsonl` must already exist. This
+- `out/.work/team-master.csv` and `out/.work/ledgers/business-email-ledger.jsonl` must already exist. This
   stage cannot run before stage 3.
 
 No LLM. Pure fetch and regex.

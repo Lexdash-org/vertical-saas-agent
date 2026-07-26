@@ -1,9 +1,8 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { createRequire } from 'node:module';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../../../shared/lib/site.js';
-import { OUT_DIR, MASTER_CSV } from '../../../shared/lib/paths.js';
+import { MASTER_CSV, ensureDirs, ledgerPath, workPath } from '../../../shared/lib/paths.js';
 import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js';
 
 /**
@@ -42,8 +41,8 @@ const CONCURRENCY = Number(argVal('--concurrency') ?? 40);
 const ONLY = (argVal('--only') ?? '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
 const FORCE = process.argv.includes('--force');
 
-const CACHE = path.join(OUT_DIR, 'email-domain-cache.jsonl');
-const OUT_CSV = path.join(OUT_DIR, 'email-domains.csv');
+const CACHE = ledgerPath('email-domain-cache.jsonl');
+const OUT_CSV = workPath('email-domains.csv');
 
 interface Resolved {
   domain: string;
@@ -89,7 +88,7 @@ function loadCache(): Map<string, Resolved> {
 }
 
 async function main(): Promise<void> {
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  ensureDirs();
   const { header, rows } = parseCsv(fs.readFileSync(INPUT_CSV, 'utf8'));
   const siteIdx = requireColumn(header, WEBSITE_COL);
   const nameIdx = header.indexOf(NAME_COL);

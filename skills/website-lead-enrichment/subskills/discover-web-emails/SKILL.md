@@ -1,6 +1,9 @@
 ---
 name: discover-web-emails
 description: Use when named people still have no email after their employer's own site has been fully scraped, the address would have to come from a publication, staff directory, or professional register elsewhere on the open web, and the Codex CLI is available. Optional stage - skip it when Codex is absent.
+license: MIT
+metadata:
+  author: Lexdash-org
 ---
 
 # Discover Missing Emails on the Open Web
@@ -29,9 +32,9 @@ predict addresses.
 
 ## Required inputs
 
-- An authenticated **Codex CLI** ≥ v0.145 (`codex login`). `CODEX_BIN` overrides the
+- An authenticated **Codex CLI** ≥ v0.145 (`codex login`). `LEADGEN_CODEX_BIN` overrides the
   binary; it defaults to `codex` on `PATH`. See `../../shared/PROVIDERS.md`.
-- `out/team-master.csv` from the earlier stages.
+- `out/.work/team-master.csv` from the earlier stages.
 - `--source-csv <csv>` — the original company list, for specialty/suburb/state context.
   **Required**; there is no default. Column names default to `Website`, `Specialty`,
   `Suburb`, `State` and are overridable with `--col`, `--specialty-col`, `--suburb-col`,

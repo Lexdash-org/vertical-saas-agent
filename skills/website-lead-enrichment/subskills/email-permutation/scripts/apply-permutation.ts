@@ -1,10 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { execFileSync } from 'node:child_process';
+import { permuteCsv } from './permute.js';
 import { csvCell, parseCsv } from '../../../shared/lib/site.js';
-import { buildEmail, firstLast, nameTokens } from '../../../shared/lib/patterns.js';
-import { OUT_DIR, loadEnv, MASTER_CSV } from '../../../shared/lib/paths.js';
+import { basisToStatus } from '../../../shared/lib/basis.js';
+import { buildEmail, displayName, firstLast, nameTokens } from '../../../shared/lib/patterns.js';
+import {
+  INBOX_CSV, MASTER_CSV, README_TXT, READY_CSV, SUMMARY_JSON, VERIFY_CSV,
+  ledgerPath, loadEnv, workPath, writeAtomic,
+} from '../../../shared/lib/paths.js';
 
 /**
  * Run the email-permutation skill over everyone lacking a real personal email,
@@ -18,26 +21,160 @@ import { OUT_DIR, loadEnv, MASTER_CSV } from '../../../shared/lib/paths.js';
  *                       | no-domain | no-name
  *   email_candidates  - top-10 ranked guesses (learned pattern first), ';'-joined
  *
- * Also leaves the skill's full outputs: out/permute-wide.csv (email_1..email_18)
- * and out/permute-long.csv (source of truth).
+ * Also leaves the generator's full outputs in out/.work/: permute-wide.csv
+ * (email_1..email_18) and permute-long.csv (source of truth).
  *
  * Usage: npx tsx scripts/apply-permutation.ts
  */
 
-const HERE = path.dirname(fileURLToPath(import.meta.url));
 loadEnv();
 
-const DOMAIN_CACHE = path.join(OUT_DIR, 'email-domain-cache.jsonl');
-const PATTERNS_JSON = path.join(OUT_DIR, 'company-email-patterns.json');
-const PERMUTE_PY = path.join(HERE, 'permute.py');
-const VERIFIED_CSV = path.join(OUT_DIR, 'verified-real.csv');
-const PREDICTED_CSV = path.join(OUT_DIR, 'predicted-unverified.csv');
-const INBOX_CSV = path.join(OUT_DIR, 'company-inboxes.csv');
-const IN_CSV = path.join(OUT_DIR, 'permute-input.csv');
-const WIDE_CSV = path.join(OUT_DIR, 'permute-wide.csv');
-const LONG_CSV = path.join(OUT_DIR, 'permute-long.csv');
+const DOMAIN_CACHE = ledgerPath('email-domain-cache.jsonl');
+const PATTERNS_JSON = workPath('company-email-patterns.json');
+const BIZ_LEDGER = ledgerPath('business-email-ledger.jsonl');
+const REL_LEDGER = ledgerPath('related-email-ledger.jsonl');
+const IN_CSV = workPath('permute-input.csv');
+const WIDE_CSV = workPath('permute-wide.csv');
+const LONG_CSV = workPath('permute-long.csv');
 const MAX = 18;
 const EMBED = 10; // how many candidates to embed in the master
+
+/**
+ * The send-facing schema, identical for both person files so one saved column mapping in
+ * a sequencer works for either, and so the two can be concatenated.
+ *
+ * `email` is the recommendation. It is deliberately NOT the master's `email` column —
+ * that one holds only scraped addresses and is empty for most people, so anyone mapping
+ * a column called "email" from the old files shipped an empty campaign.
+ */
+const PERSON_HEADER = [
+  'first_name', 'last_name', 'email', 'title', 'company', 'domain', 'website',
+  'status', 'source', 'proof',
+  'business_email', 'all_business_emails', 'all_predicted_emails',
+];
+
+const INBOX_HEADER = [
+  'company', 'domain', 'website', 'email', 'all_business_emails', 'related_email',
+  'source', 'proof',
+];
+
+/**
+ * Written into out/ on every run. Deliberately holds no counts — a stale number in a
+ * file nobody regenerates is worse than no number. Counts live in run-summary.json.
+ */
+const README = `WHAT IS IN THIS FOLDER
+======================
+
+ready-to-send.csv
+  Real email addresses. Someone published each one - either on the company's own
+  website, or somewhere else on the web that we recorded. Safe to send.
+
+company-inboxes.csv
+  Real addresses too, but they belong to the business rather than to a named person
+  (info@, reception@, and similar). Safe to send. On a list of small businesses this
+  is usually the biggest file - most of them publish a front desk address and no
+  personal ones.
+
+verify-before-sending.csv
+  PREDICTIONS. Nobody has confirmed these addresses exist or belong to anyone. They
+  were assembled from a person's name and their employer's mail domain.
+
+  Run this file through an email verification service before you send to it.
+  Sending unverified guesses generates bounces and damages your sending domain.
+
+THE COLUMNS THAT MATTER
+=======================
+
+  email    the address to send to. This is the one to map in your sequencer.
+  status   "Ready to send" or "Needs verification".
+  source   plain English: where this address came from.
+  proof    a link, or the published address a format was copied from.
+           Blank means there is nothing to show you - always blank for a
+           prediction, and that is the honest answer rather than a missing value.
+
+A confirmed mail domain means the domain accepts mail. It does NOT mean the specific
+mailbox exists. Nothing here checks deliverability.
+
+.work/ holds the pipeline's own state so a run can resume. You never need to open it.
+`;
+
+interface Inbox {
+  company: string;
+  domain: string;
+  website: string;
+  business: string[];
+  related: string[];
+  sources: Record<string, string>;
+}
+
+const readJsonl = <T,>(file: string): T[] => {
+  if (!fs.existsSync(file)) return [];
+  const out: T[] = [];
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      out.push(JSON.parse(line) as T);
+    } catch {
+      /* torn line from an interrupted append */
+    }
+  }
+  return out;
+};
+
+/**
+ * Company inboxes, built from the stage 3 and 4 LEDGERS rather than from master rows.
+ *
+ * This is the whole point: the master only ever gets a row when a PERSON is found, so a
+ * clinic that publishes `info@` and names no staff has no master row at all. Building
+ * this file from master rows silently dropped every such company — on a 1,097-company
+ * run, 955 domains reached the master and the rest vanished, taking their published
+ * inboxes with them. On a small-business list those are most of the usable contacts.
+ *
+ * Later ledger lines win, matching the append-only last-write-wins rule everywhere else.
+ */
+function buildInboxes(): Map<string, Inbox> {
+  const byDomain = new Map<string, Inbox>();
+  const slot = (domain: string, company: string, website: string): Inbox => {
+    const found = byDomain.get(domain);
+    if (found) {
+      found.company ||= company;
+      found.website ||= website;
+      return found;
+    }
+    const made: Inbox = { company, domain, website, business: [], related: [], sources: {} };
+    byDomain.set(domain, made);
+    return made;
+  };
+
+  type BizRec = {
+    domain: string; company: string; website: string;
+    businessEmails?: string[]; businessEmailSourceUrl?: string; error?: string;
+  };
+  for (const rec of readJsonl<BizRec>(BIZ_LEDGER)) {
+    if (rec.error || !rec.domain || !rec.businessEmails?.length) continue;
+    const inbox = slot(rec.domain, rec.company ?? '', rec.website ?? '');
+    inbox.business = rec.businessEmails;
+    if (rec.businessEmailSourceUrl) inbox.sources[rec.businessEmails[0]] = rec.businessEmailSourceUrl;
+  }
+
+  type RelRec = {
+    domain: string; company: string; website: string;
+    ownEmails?: string[]; relatedEmails?: string[]; sources?: Record<string, string>; error?: string;
+  };
+  for (const rec of readJsonl<RelRec>(REL_LEDGER)) {
+    if (rec.error || !rec.domain) continue;
+    const own = rec.ownEmails ?? [];
+    const related = rec.relatedEmails ?? [];
+    if (!own.length && !related.length) continue;
+    const inbox = slot(rec.domain, rec.company ?? '', rec.website ?? '');
+    // Stage 4 only runs for companies stage 3 left empty, so this adds rather than replaces.
+    for (const e of own) if (!inbox.business.includes(e)) inbox.business.push(e);
+    inbox.related = related;
+    Object.assign(inbox.sources, rec.sources ?? {});
+  }
+
+  return byDomain;
+}
 
 function main(): void {
   // MX email domain + provider per company
@@ -67,7 +204,9 @@ function main(): void {
     if (!dom || deadDomains.has(dom)) return ''; // no domain, or DNS says it takes no mail
     return dom; // website domain — a guess, flagged (unverified-domain) downstream
   };
-  const learned: Record<string, { pattern: string; confidence: string }> = fs.existsSync(PATTERNS_JSON)
+  // `source` is the real published address the pattern was derived from — stage 7's own
+  // proof, which becomes this stage's `proof` column for every learned prediction.
+  const learned: Record<string, { pattern: string; confidence: string; source?: string }> = fs.existsSync(PATTERNS_JSON)
     ? JSON.parse(fs.readFileSync(PATTERNS_JSON, 'utf8'))
     : {};
 
@@ -102,7 +241,7 @@ function main(): void {
     if ((r[pe] || '').trim()) return; // already has a real scraped email
     if (webFound(r)) return; // already has a real sourced email — no need to guess
     // Single-token names ("Cher") are handled separately below, not permuted here.
-    // permute.py is called with both name columns pointing at the one `name` field, so
+    // permute.ts is called with both name columns pointing at the one `name` field, so
     // a lone token would satisfy its "first and last are present" check and produce
     // cher.cher@domain — a fabricated surname labelled default:first.last.
     if (!firstLast(r[ni] || '')) return;
@@ -115,13 +254,21 @@ function main(): void {
   });
   fs.writeFileSync(IN_CSV, inLines.join('\n') + '\n');
 
-  // Run the skill's script.
-  execFileSync(
-    'python3',
-    [PERMUTE_PY, '--in', IN_CSV, '--out-wide', WIDE_CSV, '--out-long', LONG_CSV,
-      '--first-col', 'name', '--last-col', 'name',
-      '--company-domain-col', 'company_domain', '--email-domain-col', 'email_domain', '--max', String(MAX)],
-    { stdio: 'inherit' },
+  // Run the generator in-process. Both name columns point at the single `name` field —
+  // permuteCsv takes the first token as `first` and the last as `last`.
+  const summary = permuteCsv({
+    input: IN_CSV,
+    outWide: WIDE_CSV,
+    outLong: LONG_CSV,
+    firstCol: 'name',
+    lastCol: 'name',
+    companyDomainCol: 'company_domain',
+    emailDomainCol: 'email_domain',
+    max: MAX,
+  });
+  console.error(
+    `permute: ${summary.rowsIn} rows in, ${summary.candidatesOut} candidates out ` +
+    `(skipped ${summary.skippedDomain} no-domain, ${summary.skippedName} no-name)`,
   );
 
   // Read wide output: row_id -> [candidate emails]
@@ -146,17 +293,42 @@ function main(): void {
   const keepIdx = keep.map((h) => header.indexOf(h));
   // Split by trustworthiness as each row is built. `known`/`web-found` are addresses
   // that demonstrably exist; learned:/default: are guesses that have never been checked.
-  const isReal = (basis: string): boolean => basis === 'known' || basis.startsWith('web-found:');
-  const realRows: string[] = [outHeader.join(',')];
-  const predictedRows: string[] = [outHeader.join(',')];
-  // Published company inboxes, one row per domain — collected in this same pass.
+  const readyRows: string[] = [PERSON_HEADER.join(',')];
+  const verifyRows: string[] = [PERSON_HEADER.join(',')];
   const bizCol = header.indexOf('business_email');
   const allBizCol = header.indexOf('all_business_emails');
-  const relCol = header.indexOf('related_email');
   const compCol = header.indexOf('company');
   const siteCol = header.indexOf('website');
+  const titleCol = header.indexOf('title');
+  const emailSrcCol = header.indexOf('email_source_url');
+  const wfsCol = header.indexOf('web_found_source');
   const cell = (r: string[], i: number): string => (i >= 0 ? (r[i] || '').trim() : '');
-  const inboxes = new Map<string, string[]>();
+  const inboxes = buildInboxes();
+  let withProof = 0;
+
+  /**
+   * The evidence a buyer can check. Only ever a real artefact — a page that carries the
+   * address, or the published address a format was learned from. A prediction has none,
+   * and saying so is the honest answer.
+   */
+  const proofFor = (r: string[], basis: string, dom: string): string => {
+    if (basis === 'known') return cell(r, emailSrcCol);
+    if (basis.startsWith('web-found:')) return cell(r, wfsCol);
+    if (basis.startsWith('learned:')) return learned[dom]?.source ?? '';
+    return '';
+  };
+
+  /** Project a master row into the send-facing schema. */
+  const personRow = (r: string[], dom: string, best: string, basis: string, cands: string[]): string => {
+    const { status, source } = basisToStatus(basis);
+    const { first, last } = displayName(r[ni] || '');
+    const proof = proofFor(r, basis, dom);
+    return [
+      first, last, best, cell(r, titleCol), cell(r, compCol), dom, cell(r, siteCol),
+      status, source, proof,
+      cell(r, bizCol), cell(r, allBizCol), cands.slice(0, EMBED).join('; '),
+    ].map(csvCell).join(',');
+  };
 
   rows.forEach((r, i) => {
     const base = keepIdx.map((j) => (j >= 0 ? r[j] ?? '' : ''));
@@ -220,48 +392,86 @@ function main(): void {
 
     // Route while `best` and `basis` are still in hand. This used to re-parse every
     // serialized row to recover two values it had right here.
-    if (best.trim()) (isReal(basis) ? realRows : predictedRows).push(line);
-
-    // A company inbox belongs to the business, not to this person, so it cannot go in
-    // verified-real.csv without implying otherwise — but without its own file it would
-    // be invisible to anyone using the split, and for small businesses it is most of
-    // the usable contacts. "Any email is a lead."
-    const biz = cell(r, bizCol);
-    const rel = cell(r, relCol);
-    if (dom && !inboxes.has(dom) && (biz || rel)) {
-      inboxes.set(dom, [cell(r, compCol), dom, cell(r, siteCol), biz, cell(r, allBizCol), rel]);
+    if (best.trim()) {
+      const { sendable } = basisToStatus(basis);
+      (sendable ? readyRows : verifyRows).push(personRow(r, dom, best, basis, candidates));
+      // Counted only for real addresses: a learned prediction also carries evidence, but
+      // "N of the addresses you can send carry a checkable link" is the claim being made.
+      if (sendable && proofFor(r, basis, dom)) withProof += 1;
     }
   });
 
-  const tmp = `${MASTER_CSV}.tmp`;
-  fs.writeFileSync(tmp, lines.join('\n') + '\n');
-  fs.renameSync(tmp, MASTER_CSV);
-  fs.writeFileSync(VERIFIED_CSV, realRows.join('\n') + '\n');
-  fs.writeFileSync(PREDICTED_CSV, predictedRows.join('\n') + '\n');
+  writeAtomic(MASTER_CSV, lines.join('\n') + '\n');
+  writeAtomic(READY_CSV, readyRows.join('\n') + '\n');
+  writeAtomic(VERIFY_CSV, verifyRows.join('\n') + '\n');
 
-  const inboxLines = ['company,domain,website,business_email,all_business_emails,related_email'];
-  for (const row of inboxes.values()) inboxLines.push(row.map(csvCell).join(','));
-  fs.writeFileSync(INBOX_CSV, inboxLines.join('\n') + '\n');
+  const inboxLines = [INBOX_HEADER.join(',')];
+  for (const inbox of inboxes.values()) {
+    // One column to upload, like the person files: the company's own address when it has
+    // one, otherwise the affiliated one.
+    const email = inbox.business[0] ?? inbox.related[0] ?? '';
+    if (!email) continue;
+    const onOwnDomain = Boolean(inbox.business[0]);
+    inboxLines.push([
+      inbox.company, inbox.domain, inbox.website, email,
+      inbox.business.join('; '), inbox.related[0] ?? '',
+      onOwnDomain ? 'Published on their website' : 'Published on an affiliated domain',
+      inbox.sources[email] ?? '',
+    ].map(csvCell).join(','));
+  }
+  writeAtomic(INBOX_CSV, inboxLines.join('\n') + '\n');
 
-  console.log('\n=== best_email basis ===');
-  console.log('known (real email):            ', known);
-  console.log('web-found (sourced open web):  ', webN);
-  console.log('learned company pattern:       ', learnedN, '(high confidence)');
-  console.log('single-token name (first@):    ', mononym);
-  console.log('default (confirmed: biz-email or MX):', defConfirmed);
-  console.log('default first.last (unverified):', defUnverified, '(website domain, no MX)');
-  console.log('no mail domain (dead/absent):  ', noDomain, '(no guess emitted — would bounce)');
-  console.log('unusable name:                 ', noName);
-  console.log(`\n=== files ===`);
-  console.log(`${path.basename(MASTER_CSV)}          everyone, every column (${lines.length - 1} rows)`);
-  console.log(`${path.basename(VERIFIED_CSV)}         ${realRows.length - 1} REAL addresses — safe to send`);
-  console.log(`${path.basename(PREDICTED_CSV)}  ${predictedRows.length - 1} PREDICTIONS — verify before sending`);
-  console.log(`${path.basename(INBOX_CSV)}       ${inboxes.size} companies with a published inbox — real, safe to send`);
-  console.log('\nThe predicted file is guesses, not verified addresses. Sending it without');
-  console.log('running it through an email verification service first will generate bounces');
+  const readyCount = readyRows.length - 1;
+  const verifyCount = verifyRows.length - 1;
+  const inboxCount = inboxLines.length - 1;
+
+  writeAtomic(README_TXT, README);
+  writeAtomic(SUMMARY_JSON, JSON.stringify({
+    schema: 1,
+    generatedAt: new Date().toISOString(),
+    files: {
+      'ready-to-send.csv': readyCount,
+      'verify-before-sending.csv': verifyCount,
+      'company-inboxes.csv': inboxCount,
+    },
+    people: {
+      total: lines.length - 1,
+      readyToSend: readyCount,
+      needsVerification: verifyCount,
+      noAddress: noDomain + noName,
+    },
+    readyToSend: { known, webFound: webN, withProof },
+    needsVerification: {
+      learnedPattern: learnedN,
+      singleTokenName: mononym,
+      confirmedDomain: defConfirmed,
+      unverifiedDomain: defUnverified,
+    },
+    noAddress: { noMailDomain: noDomain, unusableName: noName },
+    companies: {
+      withInbox: inboxCount,
+      withLearnedPattern: Object.keys(learned).length,
+    },
+    warning:
+      'verify-before-sending.csv holds predictions, not verified addresses. Run them ' +
+      'through an email verification service before sending or you will generate ' +
+      'bounces and damage your sending domain.',
+  }, null, 2) + '\n');
+
+  const name = (p: string): string => path.basename(p);
+  console.log('\n=== what you can send ===');
+  console.log(`${name(READY_CSV)}              ${readyCount} real addresses (${known} published, ${webN} sourced) — ${withProof} carry a link you can check`);
+  console.log(`${name(INBOX_CSV)}            ${inboxCount} company inboxes — real, but they reach the business not a person`);
+  console.log('\n=== what needs checking first ===');
+  console.log(`${name(VERIFY_CSV)}    ${verifyCount} predictions — ${learnedN} from a company's own format, ${defConfirmed + defUnverified + mononym} from a standard pattern`);
+  console.log(`\nNo address for ${noDomain + noName} people (${noDomain} had no mail domain, ${noName} an unusable name).`);
+  console.log('\nThe predictions are guesses, not verified addresses. Sending them without');
+  console.log('running them through an email verification service first will generate bounces');
   console.log('and damage your sending domain.');
-  console.log(`\npredicted for ${needsPredict} people · learned patterns cover ${Object.keys(learned).length} companies`);
-  console.log(`master columns: ${outHeader.slice(-5).join(', ')}`);
+  // Relative only when it is actually shorter — LEADGEN_OUT_DIR often points elsewhere,
+  // where a relative path is a wall of "../".
+  const rel = path.relative(process.cwd(), SUMMARY_JSON);
+  console.log(`\nFull counts: ${rel.startsWith('..') ? SUMMARY_JSON : rel}`);
 }
 
 main();

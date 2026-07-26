@@ -3,9 +3,10 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../../../shared/lib/site.js';
-import { OUT_DIR, loadEnv, MASTER_CSV } from '../../../shared/lib/paths.js';
+import { MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../../../shared/lib/paths.js';
 import { argVal, die, requireInput } from '../../../shared/lib/cli.js';
 import { resolveCodex } from '../../../shared/lib/codex.js';
+import { readEnv } from '../../../shared/lib/env.js';
 
 /**
  * Final-stage enrichment: for people with NO scraped email, web-search the open
@@ -40,10 +41,10 @@ const SPECIALTY_COL = argVal('--specialty-col') ?? 'Specialty';
 const SUBURB_COL = argVal('--suburb-col') ?? 'Suburb';
 const STATE_COL = argVal('--state-col') ?? 'State';
 const MERGE_ONLY = process.argv.includes('--merge');
-const MODEL = process.env.CODEX_MODEL || 'gpt-5.6-sol';
+const MODEL = readEnv('codexModel') ?? 'gpt-5.6-sol';
 
 /**
- * Auto-detected: CODEX_BIN if it actually exists, else PATH, else the usual install
+ * Auto-detected: LEADGEN_CODEX_BIN if it actually exists, else PATH, else the usual install
  * locations. A stale pinned path is reported and stepped over rather than trusted.
  *
  * Resolved inside main() rather than at import, so `--merge` — which only folds an
@@ -61,11 +62,11 @@ function requireCodex(): string {
   }
   return codex.bin;
 }
-let CODEX_BIN = '';
+let codexBin = '';
 const PER_CALL_TIMEOUT_MS = Number(argVal('--timeout-ms') ?? 240_000);
 
-const LEDGER = path.join(OUT_DIR, 'web-search-ledger.jsonl');
-const TMP_DIR = path.join(OUT_DIR, '.web-tmp');
+const LEDGER = ledgerPath('web-search-ledger.jsonl');
+const TMP_DIR = workPath('.web-tmp');
 
 interface Ctx { specialty: string; suburb: string; state: string }
 interface Hit {
@@ -146,7 +147,7 @@ class RateLimit extends Error {}
  *  stdin ("Reading additional input from stdin...") and never uses the prompt arg. */
 function runCodex(args: string[], env: NodeJS.ProcessEnv): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(CODEX_BIN, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(codexBin, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('codex timeout')); }, PER_CALL_TIMEOUT_MS);
     child.stdout.on('data', (d) => (stdout += d));
@@ -241,9 +242,7 @@ function merge(): { added: number } {
     }
     lines.push([...row, wf, ws, wc].map(csvCell).join(','));
   });
-  const tmp = `${MASTER_CSV}.tmp`;
-  fs.writeFileSync(tmp, lines.join('\n') + '\n');
-  fs.renameSync(tmp, MASTER_CSV);
+  writeAtomic(MASTER_CSV, lines.join('\n') + '\n');
   return { added };
 }
 
@@ -254,7 +253,7 @@ const STOP_AT = Number(argVal('--stop-at-percent') ?? 90);
 function weeklyUsedPercent(): Promise<number | null> {
   return new Promise((resolve) => {
     const env = { ...process.env }; delete env.OPENAI_API_KEY;
-    const child = spawn(CODEX_BIN, ['app-server', '--stdio'], { env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = spawn(codexBin, ['app-server', '--stdio'], { env, stdio: ['pipe', 'pipe', 'ignore'] });
     let buf = '', done = false;
     const finish = (v: number | null) => { if (done) return; done = true; try { child.kill('SIGKILL'); } catch { /* */ } resolve(v); };
     const timer = setTimeout(() => finish(null), 20_000);
@@ -277,7 +276,7 @@ function weeklyUsedPercent(): Promise<number | null> {
 
 async function main(): Promise<void> {
   if (MERGE_ONLY) { const { added } = merge(); console.log(`merge: ${added} best_email upgraded to web-found`); return; }
-  CODEX_BIN = requireCodex();
+  codexBin = requireCodex();
 
   const ctxMap = loadContext();
   const { header, rows } = parseCsv(fs.readFileSync(MASTER_CSV, 'utf8'));

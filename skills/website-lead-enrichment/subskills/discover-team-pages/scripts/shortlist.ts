@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import { csvCell, type SiteRankRecord } from '../../../shared/lib/site.js';
 import { shortlistPages } from './teamPages.js';
-import { outPath } from '../../../shared/lib/paths.js';
+import { ledgerPath, workPath } from '../../../shared/lib/paths.js';
 import { argVal } from '../../../shared/lib/cli.js';
 
 /**
@@ -15,8 +15,9 @@ import { argVal } from '../../../shared/lib/cli.js';
 
 const MIN_SCORE = Number(argVal('--min-score') ?? 85);
 const MAX_PAGES = Number(argVal('--max-pages') ?? 5);
-const JSONL = outPath('team-page-rank.jsonl');
-const OUT_CSV = outPath('team-page-shortlist.csv');
+// Both are working state: this is a diagnostic view of stage 1, not a deliverable.
+const JSONL = ledgerPath('team-page-rank.jsonl');
+const OUT_CSV = workPath('team-page-shortlist.csv');
 
 // Last record per site wins (reruns/--force append newer records).
 const byKey = new Map<string, SiteRankRecord>();

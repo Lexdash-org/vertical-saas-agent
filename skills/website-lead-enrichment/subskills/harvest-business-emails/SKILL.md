@@ -1,6 +1,9 @@
 ---
 name: harvest-business-emails
 description: Use when company websites must be checked for published same-domain business or role inboxes after people extraction and before affiliated-domain recovery, open-web discovery, or email prediction.
+license: MIT
+metadata:
+  author: Lexdash-org
 ---
 
 # Harvest Business Emails
@@ -18,7 +21,7 @@ patterns, look up MX records, or generate staff addresses.
 
 - Company, website, and normalized domain from the original input list, via
   `--input <csv>`. **Required**; there is no default.
-- `ZYTE_API_KEY` for every page fetch. No LLM.
+- `LEADGEN_ZYTE_API_KEY` for every page fetch. No LLM.
 
 Credentials and the no-fallback rule are defined once in `../../shared/PROVIDERS.md`.
 

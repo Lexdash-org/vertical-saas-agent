@@ -1,5 +1,6 @@
 import type OpenAI from 'openai';
 import { z } from 'zod';
+import { requireEnv } from './env.js';
 
 /**
  * Team-member extractor building blocks: fast Zyte fetch (static HTML first,
@@ -14,6 +15,13 @@ export interface Person {
   name: string;
   title: string | null;
   email: string | null;
+  /**
+   * The page this person was read from — the proof that ships beside their address.
+   *
+   * Set by the extractor from the page it was handed, never by a model: it must point at
+   * a page that genuinely contains the address, or it is worse than no proof at all.
+   */
+  sourceUrl: string | null;
 }
 
 export interface PageLink {
@@ -358,8 +366,7 @@ export function extractEmails(html: string): string[] {
  * browser rendering ONLY when the static HTML has almost no visible text.
  */
 export async function fetchPage(url: string, opts: { forceRender?: boolean } = {}): Promise<FetchedPage> {
-  const apiKey = process.env.ZYTE_API_KEY;
-  if (!apiKey) throw new Error('ZYTE_API_KEY not set (expected in repo-root .env)');
+  const apiKey = requireEnv('zyteKey', 'fetching pages (stages 2-4)');
   let html = '';
   let rendered = false;
   let apiCaptures: ApiCapture[] = [];
@@ -433,8 +440,7 @@ export interface InteractOptions {
  * but still returns the HTML captured so far — exactly what we want.
  */
 export async function fetchPageInteractive(url: string, opts: InteractOptions): Promise<FetchedPage> {
-  const apiKey = process.env.ZYTE_API_KEY;
-  if (!apiKey) throw new Error('ZYTE_API_KEY not set (expected in repo-root .env)');
+  const apiKey = requireEnv('zyteKey', 'fetching pages (stages 2-4)');
   const rounds = Math.min(Math.max(opts.rounds ?? 6, 1), 12);
   const actions: Record<string, unknown>[] = [];
   if (opts.mode !== 'render') {
@@ -554,6 +560,8 @@ async function extractChunk(
     name: p.name.trim(),
     title: p.title?.trim() || null,
     email: p.email?.trim().toLowerCase() || null,
+    // Stamped here, from the URL we fetched — not asked of the model.
+    sourceUrl: url || null,
   }));
 }
 
@@ -573,11 +581,50 @@ export async function extractPeopleFromPage(
   return results.flat();
 }
 
+/**
+ * Collects addresses across several pages of one site, remembering which page each one
+ * came from — the proof that ships beside a company inbox.
+ *
+ * First page wins: a homepage `info@` is better evidence than the same address repeated
+ * in a footer three clicks deep. Stages 3 and 4 both harvest this way.
+ */
+export class EmailSources {
+  private readonly byEmail = new Map<string, string>();
+
+  /** Record every address found on `url`, keeping the first page each appeared on. */
+  add(found: string[], url: string): void {
+    for (const e of found) {
+      const key = e.toLowerCase();
+      if (!this.byEmail.has(key)) this.byEmail.set(key, url);
+    }
+  }
+
+  /** Every address seen, lowercased — the input to a stage's own classifier. */
+  emails(): string[] {
+    return [...this.byEmail.keys()];
+  }
+
+  sourceOf(email: string): string {
+    return this.byEmail.get(email.toLowerCase()) ?? '';
+  }
+
+  /** `{email: url}` for the given addresses, omitting any with no recorded page. */
+  sourceMap(emails: string[]): Record<string, string> {
+    return Object.fromEntries(
+      emails.map((e) => [e, this.sourceOf(e)]).filter(([, url]) => url),
+    );
+  }
+}
+
+/** Case/punctuation-insensitive name key — the identity used to merge duplicate people. */
+export const personKey = (name: string): string =>
+  name.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+
 /** Deterministic merge of duplicate people (case/punctuation-insensitive name key). */
 export function dedupePeople(raw: Person[]): Person[] {
   const byKey = new Map<string, Person>();
   for (const p of raw) {
-    const key = p.name.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim();
+    const key = personKey(p.name);
     if (!key) continue;
     const prev = byKey.get(key);
     if (!prev) {
@@ -585,7 +632,13 @@ export function dedupePeople(raw: Person[]): Person[] {
     } else {
       if (p.name.length > prev.name.length) prev.name = p.name;
       if (p.title && (!prev.title || p.title.length > prev.title.length)) prev.title = p.title;
-      if (p.email && !prev.email) prev.email = p.email;
+      // Keep the page that carried the address alongside the address itself, so the two
+      // never come from different pages.
+      if (p.email && !prev.email) {
+        prev.email = p.email;
+        prev.sourceUrl = p.sourceUrl;
+      }
+      prev.sourceUrl ??= p.sourceUrl;
     }
   }
   return [...byKey.values()];
@@ -598,7 +651,12 @@ Rules:
 - Drop entries that are clearly not people (departments, "Our Team", locations).
 - Keep the organization's own people only.
 - Order: leadership/founders first, then the rest alphabetically by name.
-Respond with strict JSON only: {"people":[{"name":"...","title":"..."|null,"email":"..."|null}]}.`;
+INPUT is one person per line, pipe-separated, empty where unknown:
+  Jane Smith | Cardiologist | jane.smith@clinic.com
+  J Smith    |               |
+
+OUTPUT: strict JSON only, exactly this shape:
+{"people":[{"name":"Jane Smith","title":"Cardiologist","email":"jane.smith@clinic.com"},{"name":"Ann Lee","title":null,"email":null}]}`;
 
 export async function organizePeople(client: OpenAI, model: string, raw: Person[]): Promise<Person[]> {
   if (!raw.length) return [];
@@ -613,13 +671,30 @@ export async function organizePeople(client: OpenAI, model: string, raw: Person[
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: ORGANIZE_SYSTEM },
-      { role: 'user', content: JSON.stringify(deduped) },
+      // One line per person rather than JSON.stringify(). The JSON form re-sends
+      // {"name":,"title":,"email":} for every record — about half the payload is
+      // punctuation and repeated keys. The shape is described once, in the system
+      // prompt, where it belongs.
+      {
+        role: 'user',
+        content: deduped.map((p) => `${p.name} | ${p.title ?? ''} | ${p.email ?? ''}`).join('\n'),
+      },
     ],
   });
   const parsed = peopleSchema.parse(parseJson(res.choices[0]?.message?.content ?? '{}'));
+  // The model is sent three fields and returns three fields, so sourceUrl would be lost
+  // across this call. Re-attach it from the pre-call records instead of asking the model
+  // to echo a URL back — a model-repeated URL is a URL that can be wrong.
+  const urlByPerson = new Map<string, string | null>();
+  for (const p of deduped) {
+    const key = personKey(p.name);
+    if (key && p.sourceUrl && !urlByPerson.get(key)) urlByPerson.set(key, p.sourceUrl);
+  }
   return parsed.people.map((p) => ({
     name: p.name.trim(),
     title: p.title?.trim() || null,
     email: p.email?.trim().toLowerCase() || null,
+    // Null when the model renamed someone past recognition — better than a wrong page.
+    sourceUrl: urlByPerson.get(personKey(p.name)) ?? null,
   }));
 }

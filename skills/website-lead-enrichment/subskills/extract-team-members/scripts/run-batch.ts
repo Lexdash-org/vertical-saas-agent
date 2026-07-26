@@ -12,7 +12,7 @@ import type { SiteRankRecord } from '../../../shared/lib/site.js';
 import { buildTeamExtractor, lunaClient, organizePeople } from './agent.js';
 import { extractPeopleFromPage, fetchPage, type Person } from '../../../shared/lib/scrape.js';
 import { extractionModel } from '../../../shared/lib/llm.js';
-import { OUT_DIR, loadEnv, MASTER_CSV } from '../../../shared/lib/paths.js';
+import { COMPANIES_DIR, MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../../../shared/lib/paths.js';
 import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js';
 
 /**
@@ -22,7 +22,7 @@ import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js'
  *   -> ONE master CSV, upserted: new person = new row, known person (same
  *      domain + name) = update title/email in place.
  *
- * Master: out/team-master.csv. Per-site debug JSON: out/<host>.json.
+ * Master: out/.work/team-master.csv. Per-site debug JSON: out/.work/companies/<host>.json.
  * Resumable: sites already in the master are skipped unless --force.
  *
  * Usage:
@@ -30,8 +30,8 @@ import { argVal, requireInput, requireColumn } from '../../../shared/lib/cli.js'
  *                                     [--only frag,frag] [--limit N] [--concurrency K] [--force]
  */
 
-// override:true — the repo .env is authoritative; a stale ZYTE_API_KEY exported
-// in ~/.zshrc (suspended account) otherwise shadows the valid key.
+// ~/.leadgen/.env is authoritative: it is loaded with override:true, so a stale key
+// exported in ~/.zshrc cannot shadow the valid one. See shared/lib/paths.ts.
 loadEnv();
 
 const INPUT_CSV = requireInput();
@@ -39,12 +39,17 @@ const WEBSITE_COL = argVal('--col') ?? 'Website';
 const NAME_COL = argVal('--name-col') ?? 'Name';
 const ONLY = (argVal('--only') ?? '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
 const SITE_LIMIT = argVal('--limit') ? Number(argVal('--limit')) : Infinity;
-const CONCURRENCY = Number(argVal('--concurrency') ?? 3);
+/**
+ * Sites extracted in parallel. Each one is mostly waiting on network — Zyte fetches and
+ * LLM calls — so the ceiling is provider rate limits, not local CPU. Measured median was
+ * 27s per site; at 3 the lanes sat idle. Lower it if a provider starts 429ing.
+ */
+const CONCURRENCY = Number(argVal('--concurrency') ?? 6);
 const FORCE = process.argv.includes('--force');
 
-const LEDGER = path.join(OUT_DIR, 'extract-ledger.jsonl');
-const LOCK = path.join(OUT_DIR, '.batch.lock');
-const RANK_LEDGER = path.join(OUT_DIR, 'team-page-rank.jsonl');
+const LEDGER = ledgerPath('extract-ledger.jsonl');
+const LOCK = workPath('.batch.lock');
+const RANK_LEDGER = ledgerPath('team-page-rank.jsonl');
 /** Re-map even when stage 1 already ranked the site. */
 const REMAP = process.argv.includes('--remap');
 
@@ -76,6 +81,25 @@ const rankLedger = loadRankLedger();
  * `--only one-clinic` paid for ~1,000 records, and every skipped site's ranked
  * candidates stayed resident for the hours a batch runs.
  */
+/**
+ * What stage 1 concluded about a site, when it failed.
+ *
+ * `null` means stage 1 never got to it, so re-mapping here is worth a try. A record
+ * that carries an error means mapping has ALREADY been attempted and failed — repeating
+ * it just pays the same timeout twice, which is where roughly 200s per failed site went.
+ */
+function rankFailure(key: string): { siteDown: boolean; reason: string } | null {
+  const line = rankLedger.get(key);
+  if (!line) return null;
+  try {
+    const rec = JSON.parse(line) as SiteRankRecord;
+    if (!rec.error) return null;
+    return { siteDown: rec.siteDown === true, reason: rec.error };
+  } catch {
+    return null;
+  }
+}
+
 function cachedRanking(key: string): TeamPagesResult | null {
   const line = rankLedger.get(key);
   if (!line) return null;
@@ -104,7 +128,12 @@ function cachedRanking(key: string): TeamPagesResult | null {
 }
 
 /** Wall-clock cap per site — a dead/slow host must not hold a slot forever. */
-const SITE_TIMEOUT_MS = Number(argVal('--site-timeout-ms') ?? 420_000);
+/**
+ * Hard cap on the agent loop for one site. Whatever was extracted before the cap is
+ * kept, so this trades a long tail for a little completeness on very large sites. The
+ * slowest site that actually returned people in a 25-clinic run took 82s.
+ */
+const SITE_TIMEOUT_MS = Number(argVal('--site-timeout-ms') ?? 240_000);
 
 /**
  * Single-writer lock. Two batch processes both doing load->upsert->write on the
@@ -148,7 +177,7 @@ function acquireLock(): void {
     });
   }
 }
-const MASTER_HEADER = ['company', 'domain', 'website', 'name', 'title', 'email', 'updated_at'];
+const MASTER_HEADER = ['company', 'domain', 'website', 'name', 'title', 'email', 'email_source_url', 'updated_at'];
 
 // ---------------------------------------------------------------------------
 // Master CSV: load -> upsert -> write (single writer; person key = domain+name)
@@ -161,6 +190,8 @@ interface MasterRow {
   name: string;
   title: string;
   email: string;
+  /** The page `email` was read from — proof that ships beside the address. */
+  emailSourceUrl: string;
   updatedAt: string;
 }
 
@@ -180,6 +211,7 @@ function loadMaster(): Map<string, MasterRow> {
       name: r[idx.name] ?? '',
       title: r[idx.title] ?? '',
       email: r[idx.email] ?? '',
+      emailSourceUrl: r[idx.email_source_url] ?? '',
       updatedAt: r[idx.updated_at] ?? '',
     };
     if (row.domain && row.name) rows.set(personKey(row.domain, row.name), row);
@@ -195,12 +227,12 @@ function writeMaster(rows: Map<string, MasterRow>): void {
   const lines = [MASTER_HEADER.join(',')];
   for (const r of sorted) {
     lines.push(
-      [r.company, r.domain, r.website, r.name, r.title, r.email, r.updatedAt].map(csvCell).join(','),
+      [r.company, r.domain, r.website, r.name, r.title, r.email, r.emailSourceUrl, r.updatedAt]
+        .map(csvCell)
+        .join(','),
     );
   }
-  const tmp = `${MASTER_CSV}.tmp`;
-  fs.writeFileSync(tmp, lines.join('\n') + '\n');
-  fs.renameSync(tmp, MASTER_CSV);
+  writeAtomic(MASTER_CSV, lines.join('\n') + '\n');
 }
 
 /** Domains with a successful ledger entry — includes legitimate 0-people sites. */
@@ -240,6 +272,8 @@ function upsertPeople(
         name: p.name.trim(),
         title: p.title ?? '',
         email: p.email ?? '',
+        // Only meaningful next to an address; a page with no email proves nothing.
+        emailSourceUrl: p.email ? p.sourceUrl ?? '' : '',
         updatedAt: now,
       });
       added += 1;
@@ -249,6 +283,9 @@ function upsertPeople(
     const nextEmail = p.email ?? existing.email;
     if (nextTitle !== existing.title || nextEmail !== existing.email) {
       existing.title = nextTitle || existing.title;
+      // The proof URL moves with the address it proves — never left pointing at the page
+      // a previous, different address came from.
+      if (nextEmail && nextEmail !== existing.email) existing.emailSourceUrl = p.sourceUrl ?? '';
       existing.email = nextEmail || existing.email;
       existing.updatedAt = now;
       updated += 1;
@@ -309,13 +346,33 @@ async function processSite(
     // from the homepage. Never fail a site just because ranking failed.
     let ranked: TeamPagesResult | null = cachedRanking(target.key);
     const reused = ranked !== null;
+    const failure = reused ? null : rankFailure(target.key);
+
+    // A host that answered nothing in stage 1 will answer nothing here either. Skipping
+    // costs one ledger row; not skipping costs a full site timeout of dead fetches, and
+    // was 47% of the wall time on a 25-company run.
+    if (failure?.siteDown) {
+      outcome.error = `site unreachable (${failure.reason.slice(0, 80)})`;
+      outcome.ms = Date.now() - t0;
+      console.log(`  [${target.key}] skipped — host did not respond in stage 1`);
+      return outcome;
+    }
+
     try {
-      ranked ??= await findTeamPages(target.original, { company: target.company, clients });
-      outcome.pagesRanked = ranked.pages.length;
-      console.log(
-        `  [${target.key}] shortlist ${reused ? 'reused from stage 1' : 'ready'} — ` +
-          `${ranked.pages.length} pages, ${ranked.profilePages.length} profiles`,
-      );
+      if (failure) {
+        // Mapping already failed once. Re-running it pays the same timeout again for
+        // the same answer; go straight to unseeded exploration.
+        console.log(
+          `  [${target.key}] stage 1 could not map this site (${failure.reason.slice(0, 60)}) — exploring unseeded, not re-mapping`,
+        );
+      } else {
+        ranked ??= await findTeamPages(target.original, { company: target.company, clients });
+        outcome.pagesRanked = ranked.pages.length;
+        console.log(
+          `  [${target.key}] shortlist ${reused ? 'reused from stage 1' : 'ready'} — ` +
+            `${ranked.pages.length} pages, ${ranked.profilePages.length} profiles`,
+        );
+      }
     } catch (err) {
       console.log(
         `  [${target.key}] shortlist unavailable (${err instanceof Error ? err.message.slice(0, 60) : err}) — agent will explore unseeded`,
@@ -372,7 +429,7 @@ async function processSite(
     outcome.ms = Date.now() - t0;
 
     fs.writeFileSync(
-      path.join(OUT_DIR, `${target.key}.json`),
+      path.join(COMPANIES_DIR, `${target.key}.json`),
       JSON.stringify({ agentSummary: result?.text?.trim() ?? '(timed out)', ...outcome }, null, 2) + '\n',
     );
     console.log(

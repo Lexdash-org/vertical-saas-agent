@@ -1,6 +1,9 @@
 ---
 name: resolve-email-domains
 description: Use when company domains need checking for whether they can receive mail at all, before any address is predicted against them, so predictions are never generated on parked or dead domains.
+license: MIT
+metadata:
+  author: Lexdash-org
 ---
 
 # Resolve Receiving Email Domains
@@ -18,7 +21,7 @@ Do not scrape, do not probe SMTP, do not guess addresses.
 - `--input <csv>` — the company list. **Required**; there is no default.
 - No credentials. See `../../shared/PROVIDERS.md`; this stage appears there with every
   provider column empty, deliberately.
-- `out/team-master.csv` is optional — used only to report how many email-less companies
+- `out/.work/team-master.csv` is optional — used only to report how many email-less companies
   became predictable.
 
 ## Read this before trusting the name

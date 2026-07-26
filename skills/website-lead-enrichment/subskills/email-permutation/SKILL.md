@@ -1,18 +1,17 @@
 ---
 name: email-permutation
 description: >-
-  Predict candidate business email addresses from a person's first name, last name and
-  their company's domain(s), handling the common case where a company runs a separate
-  look-alike domain for outbound mail to protect the primary domain's reputation (e.g.
-  site on gethuntd.com, mail from tryhuntd.com). Emits ~18 ranked guesses per person,
-  either as a batch over a CSV or inline for a single person. Use when the user says
-  "predict emails for these leads", "guess this person's work email", "I have names and
-  domains but no emails", "permute emails for a lead list", or "generate email variations
-  for first/last name + domain". NOT for: finding or inferring which alternate domain a
-  company uses (this skill consumes domains, it does not discover them); verifying,
-  validating or bounce-checking addresses (use a dedicated verification service - this
-  skill never touches the network); cleaning or deduping a lead list; or uploading the
-  result to a sending platform.
+  Use when first name, last name and a company domain must become ranked candidate work
+  email addresses - "predict emails for these leads", "guess this person's work email",
+  "I have names and domains but no emails", "permute emails for a lead list", "generate
+  email variations for first/last name + domain" - including when the company sends mail
+  from a look-alike domain separate from its website. NOT for: discovering which
+  alternate domain a company uses (it consumes domains, it does not find them); verifying
+  or bounce-checking addresses (it never touches the network); cleaning a lead list;
+  uploading results to a sending platform.
+license: MIT
+metadata:
+  author: Lexdash-org
 ---
 
 # Email Permutation
@@ -36,11 +35,11 @@ bounces and complaints never touch the primary domain's reputation.
 ## Two ways in
 
 **Inside the pipeline** (the normal case), `scripts/apply-permutation.ts` is the entry
-point. It decides who needs a guess, fills the two domain columns below, shells out to
-`permute.py`, then merges the result into the master. See *In the pipeline* at the end of
-this file for the priority rules and the basis strings it writes.
+point. It decides who needs a guess, fills the two domain columns below, calls
+`permute.ts` in-process, then merges the result into the master. See *In the pipeline* at
+the end of this file for the priority rules and the basis strings it writes.
 
-**Standalone**, `permute.py` takes a CSV of names and domains and emits ranked candidates.
+**Standalone**, `permute.ts` takes a CSV of names and domains and emits ranked candidates.
 Everything between here and that section describes generation, which is identical either
 way.
 
@@ -75,10 +74,18 @@ a domain already known not to be the mail domain.
 
 If neither domain is present, skip the person.
 
-### 2. Dot is the only separator
+### 2. Dot is the only separator — when guessing blind
 
 Generated local-parts use **`.` or nothing**. No underscores, no hyphens, ever.
-`john_smith@` and `john-smith@` are not produced.
+`john_smith@` and `john-smith@` are not produced by the 18 patterns.
+
+**The exception, and its reason.** When a company's *own published addresses* show a
+different house style, stage 7 may learn it as a template — including separators this
+rule forbids (`anna_eastman@snp.com.au` is real; the generator would never invent it).
+A template is only ever accepted after it reproduces an address that company actually
+publishes. That is not a guess, so the dot-only rule does not apply to it.
+
+Blind guessing stays dot-only. Observed evidence overrides.
 
 Note the asymmetry, which is the easiest thing to get wrong here:
 
@@ -110,7 +117,7 @@ Ordered by real-world B2B frequency. Deliberately market-agnostic — do not reo
 specific country or industry unless the user supplies evidence for that market.
 
 The table is **not** written out in code. It lives in `../../shared/lib/patterns.json` as
-an ordered list of names, and both `permute.py` and `shared/lib/patterns.ts` derive their
+an ordered list of names, and both `permute.ts` and `shared/lib/patterns.ts` derive their
 builders from it — each name is its own formula over `first`, `last`, `fi`, `li` joined by
 `.` or nothing. Edit the JSON, never a copy. (Three hand-maintained copies is what this
 replaced.)
@@ -147,7 +154,7 @@ That is correct — do not pad the list back to 18 with invented patterns.
 ### Batch — a CSV of leads
 
 ```bash
-python3 scripts/permute.py \
+npx tsx scripts/permute.ts \
   --in leads.csv \
   --out-wide candidates_wide.csv \
   --out-long candidates_long.csv
@@ -156,7 +163,7 @@ python3 scripts/permute.py \
 Column names are configurable, since lead-export tools disagree on headers:
 
 ```bash
-python3 scripts/permute.py --in leads.csv \
+npx tsx scripts/permute.ts --in leads.csv \
   --out-wide wide.csv --out-long long.csv \
   --first-col "First Name" --last-col "Last Name" \
   --company-domain-col "Company Domain" --email-domain-col "Sending Domain" \
@@ -228,16 +235,16 @@ Not everyone gets a guess. Skipped: anyone with a real scraped `email`; anyone w
 sourced `web_found_email`; anyone whose name is a single token; anyone with no domain at
 all.
 
-The single-token gate matters. `permute.py` is called with both name columns pointed at
+The single-token gate matters. `permute.ts` is called with both name columns pointed at
 the one `name` field, so a lone token would satisfy its "first and last present" check and
 generate `cher.cher@domain` — a fabricated address that would then be labelled
 `default:first.last`. Those people get an empty `best_email` and basis `no-name` instead.
 
 ### Files written
 
-`out/team-master.csv` (updated in place), plus two derived files that split the result by
-trustworthiness: `out/verified-real.csv` (basis `known` or `web-found:*`) and
-`out/predicted-unverified.csv` (basis `learned:*` or `default:*`). People with no address
+`out/.work/team-master.csv` (updated in place), plus two derived files that split the result by
+trustworthiness: `out/ready-to-send.csv` (basis `known` or `web-found:*`) and
+`out/verify-before-sending.csv` (basis `learned:*` or `default:*`). People with no address
 appear in neither. Always report the split and warn that the predicted file must go
 through an email verifier before it is sent.
 
