@@ -128,23 +128,56 @@ report, rather than leaving a folder that half works.
 
 ## Step 5 — Credentials
 
-One file, in the user's home directory — not in a project, not inside the skill, so the
-same keys work everywhere and survive a reinstall:
+Four keys, one file. Run this for them — it creates the file only if it does not already
+exist, so re-running can never wipe keys they already have:
 
 ```bash
-mkdir -p ~/.leadgen && cp "$DEST/.env.example" ~/.leadgen/.env
+mkdir -p ~/.leadgen
+[ -f ~/.leadgen/.env ] || cat > ~/.leadgen/.env <<'EOF'
+# Paste each key after the "=" sign. No quotes, no spaces.
+
+LEADGEN_FIRECRAWL_API_KEY=
+LEADGEN_ZYTE_API_KEY=
+LEADGEN_LLM_API_KEY=
+LEADGEN_LLM_MODEL_REASONING=gpt-4o
+
+# Optional — leave blank unless you know you need them.
+LEADGEN_LLM_BASE_URL=
+LEADGEN_LLM_MODEL_EXTRACTION=
+EOF
+chmod 600 ~/.leadgen/.env
+nano ~/.leadgen/.env
 ```
 
-Walk them through the four required values:
+Then tell them **exactly** how to save, because nano gives no hint and this is where a
+non-technical user gets stuck:
 
-- `LEADGEN_FIRECRAWL_API_KEY` — site mapping (firecrawl.com)
-- `LEADGEN_ZYTE_API_KEY` — page fetching (zyte.com)
-- `LEADGEN_LLM_API_KEY` and `LEADGEN_LLM_MODEL_REASONING` — any OpenAI-compatible endpoint.
-  Add `LEADGEN_LLM_BASE_URL` for anything other than OpenAI; `.env.example` lists base URLs
-  for OpenRouter, Together, Groq, Ollama and Azure.
+> Paste each key after its `=` sign, then:
+>
+> 1. **Ctrl + O** then **Enter** — saves
+> 2. **Ctrl + X** — closes the editor
+>
+> (On a Mac that is the Control key, not Command.)
 
-Tell them why the names look like that, because it is what they are most likely to worry
-about:
+Where the three keys come from:
+
+| Key | Get it at | Free tier? |
+|---|---|---|
+| `LEADGEN_FIRECRAWL_API_KEY` | firecrawl.dev | yes |
+| `LEADGEN_ZYTE_API_KEY` | zyte.com | trial |
+| `LEADGEN_LLM_API_KEY` | platform.openai.com, or any OpenAI-compatible provider | varies |
+
+`LEADGEN_LLM_MODEL_REASONING` is pre-filled with `gpt-4o` and works as-is on OpenAI. For a
+different provider, set `LEADGEN_LLM_BASE_URL` too — `.env.example` lists the base URLs for
+OpenRouter, Together, Groq, Ollama and Azure.
+
+Confirm it saved without ever printing a value:
+
+```bash
+grep -c '^LEADGEN_.*=.\+' ~/.leadgen/.env   # expect 4 or more
+```
+
+Tell them why the names look unusual, because it is what they are most likely to ask:
 
 > Every variable starts with `LEADGEN_` so it cannot clash with another tool. Keep
 > `OPENAI_API_KEY` unset — if it is set, Codex bills that key instead of using the ChatGPT

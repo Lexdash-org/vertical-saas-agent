@@ -34,18 +34,28 @@ read the subskill before running that stage.
 3. Check the keys and report every missing one together, not one stage at a time.
 4. Confirm you have the input CSV path and which column holds the website.
 
-### No credentials yet is a setup state, not a failure
+### Setup is a prerequisite, not an option
 
-If `~/.leadgen/.env` is absent, or the required keys are empty, **offer to set them up** —
-do not start a run that will throw, and do not hand back a bare
-`LEADGEN_ZYTE_API_KEY is not set`. That message is correct for a developer and a dead end
-for a salesperson, who did not choose the variable name and cannot act on it.
+**Before anything else, check that this skill can actually run:**
 
-> You haven't added your API keys yet — want me to walk through it? Takes a couple of
-> minutes, then I'll run this list.
+```bash
+[ -d node_modules ] || [ -d "$HOME/.claude/skills/website-lead-enrichment/node_modules" ] \
+  || [ -d "$HOME/.agents/skills/website-lead-enrichment/node_modules" ] \
+  && echo "deps: ok" || echo "deps: MISSING"
+[ -f "$HOME/.leadgen/.env" ] && echo "config: ok" || echo "config: MISSING"
+```
 
-Then follow the `find-team-emails` skill, which owns setup, and come back and run. A user
-who asked for leads should never be left holding an error instead.
+If either is MISSING, **stop and hand over to the `find-team-emails` skill.** It owns
+installation and credentials; follow it, and come back here once it reports success.
+
+Do not attempt a workaround. Do not run a stage to "see what happens" — every credentialed
+stage will throw, and a raw `LEADGEN_ZYTE_API_KEY is not set` is correct for a developer
+and a dead end for a salesperson who did not choose the variable name.
+
+Say it as a next step, never as an error:
+
+> You are not set up yet — I will get that sorted first. It takes a couple of minutes,
+> then I will run this list.
 
 ## Confirm once, then run
 
