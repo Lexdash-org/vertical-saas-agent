@@ -139,6 +139,35 @@ check('trigger cases are well-formed', () => {
   return `${cases.length} cases, ${nearMisses} near-misses`;
 });
 
+/**
+ * CLAUDE.md and AGENTS.md are the same instructions under two filenames, because the
+ * runtimes disagree on where to look. Two copies without a guard is the drift this repo
+ * rejects everywhere else — the pattern table, the CSV parser, the env names.
+ *
+ * The HTML comment near the top of each names the other file, so it is compared with that
+ * line stripped rather than requiring the files be byte-identical.
+ */
+check('CLAUDE.md and AGENTS.md agree', () => {
+  const strip = (f: string): string =>
+    fs.readFileSync(f, 'utf8')
+      .replace(/<!--[\s\S]*?-->/g, '')   // the "kept identical to X" note differs by design
+      .replace(/\s+/g, ' ')
+      .trim();
+  const a = strip('CLAUDE.md');
+  const b = strip('AGENTS.md');
+  if (a !== b) {
+    // A pure append leaves no differing character, so fall back to the shorter length.
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+    throw new Error(
+      `they have drifted at char ${i}\n` +
+        `    CLAUDE.md: ...${a.slice(i, i + 70) || '(ends here)'}\n` +
+        `    AGENTS.md: ...${b.slice(i, i + 70) || '(ends here)'}`,
+    );
+  }
+  return `${a.length} chars, identical`;
+});
+
 /** Every documented basis must translate, including both suffix orders. */
 const ALL_BASES = [
   'known',

@@ -2,11 +2,11 @@
 name: find-team-emails
 description: >-
   Use when someone has a list of company websites and wants the people who work there and
-  their email addresses - "find the staff emails for these clinics", "get me contacts at
-  these companies", "enrich this account list", "scrape team members from these sites",
-  "I have domains but no emails". Handles first-time setup automatically when the tool is
-  not installed or has no API keys yet, then runs the enrichment. NOT for: verifying that
-  an address delivers, scraping one known page, or lists that already have the people.
+  their email addresses - "find staff emails for these clinics", "enrich this account
+  list", "I have domains but no emails". Also when they ask to install or set this tool
+  up, or it is broken, missing dependencies, or erroring because API keys were never
+  configured. NOT for: checking whether an address delivers, scraping one already-known
+  page, or lists that already contain the people.
 license: MIT
 metadata:
   author: Lexdash-org

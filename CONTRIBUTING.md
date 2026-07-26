@@ -4,6 +4,8 @@ Thanks for looking. This is a small project with a specific shape, and a few of 
 conventions are load-bearing in ways that are not obvious from the diff. Read the short
 version below before you start.
 
+Taking part means agreeing to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Getting set up
 
 ```bash

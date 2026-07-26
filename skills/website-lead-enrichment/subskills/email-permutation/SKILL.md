@@ -3,12 +3,9 @@ name: email-permutation
 description: >-
   Use when first name, last name and a company domain must become ranked candidate work
   email addresses - "predict emails for these leads", "guess this person's work email",
-  "I have names and domains but no emails", "permute emails for a lead list", "generate
-  email variations for first/last name + domain" - including when the company sends mail
-  from a look-alike domain separate from its website. NOT for: discovering which
-  alternate domain a company uses (it consumes domains, it does not find them); verifying
-  or bounce-checking addresses (it never touches the network); cleaning a lead list;
-  uploading results to a sending platform.
+  "I have names and domains but no emails", "permute emails for a lead list". NOT for:
+  discovering which alternate domain a company sends from, verifying or bounce-checking
+  addresses, cleaning a lead list, or uploading results to a sending platform.
 license: MIT
 metadata:
   author: Lexdash-org
@@ -28,9 +25,9 @@ bounces and complaints never touch the primary domain's reputation.
 
 | Company domain | Email domain |
 |---|---|
-| `hyperxai.xyz` | `hyperxai.info` |
-| `gethuntd.com` | `tryhuntd.com` |
-| `clayray.com`  | `clayray.com.au` |
+| `example-ai.xyz` | `example-ai.info` |
+| `getexample.com` | `tryexample.com` |
+| `example.com`    | `example.com.au` |
 
 ## Two ways in
 

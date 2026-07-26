@@ -10,5 +10,13 @@
     "noEmit": true,
     "allowJs": true
   },
-  "include": ["skills/website-lead-enrichment/**/*.ts", ".github/scripts/**/*.ts"]
+  "_comment": [
+    "`include` is a bare glob on purpose. This file is copied verbatim into an installed",
+    "skill, whose layout is <skill>/shared and <skill>/subskills — not the repo's",
+    "skills/website-lead-enrichment/... . Repo-relative paths matched nothing there, so",
+    "typecheck in an installed copy failed with TS18003 'No inputs were found'.",
+    "One glob is correct in both layouts."
+  ],
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "out"]
 }

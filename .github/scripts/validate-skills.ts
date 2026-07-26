@@ -19,6 +19,8 @@ import { join, dirname, basename, resolve } from 'node:path';
 
 const ROOT = resolve(process.argv[2] ?? '.');
 const MAX_FRONTMATTER = 1024;
+/** Spec guidance: keep descriptions under 500 chars where possible. */
+const MAX_DESCRIPTION = 500;
 const RECOMMENDED_LINES = 500;
 
 /**
@@ -106,6 +108,16 @@ for (const file of files) {
 
   if (!fields.description) {
     errors.push(`${rel}: missing required field 'description'`);
+  }
+
+  // A host with many skills installed truncates descriptions to fit its context budget,
+  // and truncation eats the TAIL — which is where the "NOT for:" clauses live. Losing
+  // those is what makes a skill fire on requests it should decline.
+  if (fields.description && fields.description.length > MAX_DESCRIPTION) {
+    warnings.push(
+      `${rel}: description is ${fields.description.length} chars; keep it under ` +
+        `${MAX_DESCRIPTION} so a host with many skills cannot truncate away the "NOT for" clauses`,
+    );
   }
 
   if (raw.length > MAX_FRONTMATTER) {

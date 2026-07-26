@@ -1,0 +1,15 @@
+# Normalize line endings so a Windows contributor's checkout does not turn every file
+# into a CRLF diff. Text is stored LF in the repo and checked out native.
+* text=auto eol=lf
+
+# Shell scripts and the config template must stay LF even on Windows — CRLF breaks a
+# shebang and can leave a stray \r on the end of an API key read from .env.
+*.sh    text eol=lf
+*.env   text eol=lf
+.env.example text eol=lf
+
+# Generated / vendored: keep out of diffs and language stats.
+package-lock.json  -diff linguist-generated
+
+# Sample data is data, not source — it should not count toward the language breakdown.
+*.csv  text eol=lf linguist-generated=false linguist-detectable=false

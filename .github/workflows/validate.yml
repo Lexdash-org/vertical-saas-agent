@@ -36,6 +36,12 @@ jobs:
       - name: Project invariants
         run: npx tsx .github/scripts/check-invariants.ts
 
+      # An agent picks a skill from its description alone. This scores the trigger cases
+      # against the real descriptions: near-misses must not look confident, positives must
+      # keep their trigger words.
+      - name: Skill routing (trigger evals)
+        run: npx tsx .github/scripts/run-evals.ts
+
       - name: No credentials committed
         run: |
           if git ls-files --error-unmatch .env 2>/dev/null; then
@@ -45,3 +51,77 @@ jobs:
 
       - name: No stray whitespace
         run: git diff --check "$(git hash-object -t tree /dev/null)" HEAD
+
+  # The published skill IS the product, so the install path is what most needs testing —
+  # and was the least tested. Two bugs reached the repo that this job would have caught:
+  # a missing .npmrc (npm install failed for every user) and a tsconfig whose include
+  # paths were repo-relative (typecheck broken in every installed copy). Both were found
+  # by hand.
+  install:
+    name: install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Follows skills/find-team-emails/SKILL.md step 4 exactly: the skill folder plus the
+      # entries in its manifest. If the two ever disagree, this job fails.
+      - name: Install as a user would
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="$RUNNER_TEMP/skills/website-lead-enrichment"
+          NEEDS="package.json .npmrc tsconfig.json .env.example examples/input"
+          mkdir -p "$DEST"
+          cp -R skills/website-lead-enrichment/. "$DEST/"
+          for item in $NEEDS; do
+            mkdir -p "$DEST/$(dirname "$item")"
+            cp -R "$item" "$DEST/$item"
+          done
+          for item in SKILL.md shared/lib/paths.ts $NEEDS; do
+            [ -e "$DEST/$item" ] || { echo "MISSING: $item"; exit 1; }
+          done
+          [ "$(ls "$DEST"/subskills/*/SKILL.md | wc -l)" -eq 8 ] || { echo "MISSING: subskills"; exit 1; }
+          echo "DEST=$DEST" >> "$GITHUB_ENV"
+
+      # Would have caught the missing .npmrc: without it this fails ERESOLVE, because
+      # firecrawl ships zod 3 while the project uses zod 4.
+      - name: npm install inside the installed skill
+        shell: bash
+        run: cd "$DEST" && npm install
+
+      # Would have caught the repo-relative tsconfig include paths (TS18003).
+      - name: Typecheck the installed copy
+        shell: bash
+        run: cd "$DEST" && npx tsc --noEmit
+
+      # Stage 6 proves paths, deps and network. Stage 8 proves the output layer — the half
+      # that produces what the user actually receives.
+      - name: Health check, both credential-free stages
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEST"
+          CHECK="$RUNNER_TEMP/wle-check"
+          rm -rf "$CHECK"
+          LEADGEN_OUT_DIR="$CHECK" npx tsx \
+            subskills/resolve-email-domains/scripts/resolve-email-domains.ts \
+            --input examples/input/companies.example.csv
+          mkdir -p "$CHECK/.work"
+          cat > "$CHECK/.work/team-master.csv" <<'CSV'
+          company,domain,website,name,title,email,email_source_url,updated_at,business_email,all_business_emails,business_email_source_url,related_email
+          Check Co,example.com,https://example.com,Jane Doe,Director,jane.doe@example.com,https://example.com/team,2026-01-01T00:00:00Z,,,,
+          Check Co,example.com,https://example.com,John Smith,Analyst,,,2026-01-01T00:00:00Z,,,,
+          CSV
+          LEADGEN_OUT_DIR="$CHECK" npx tsx subskills/email-permutation/scripts/apply-permutation.ts
+          for f in ready-to-send.csv verify-before-sending.csv company-inboxes.csv README.txt; do
+            [ -s "$CHECK/$f" ] || { echo "health check did not produce $f"; exit 1; }
+          done
+          echo "install verified: all three deliverables written"

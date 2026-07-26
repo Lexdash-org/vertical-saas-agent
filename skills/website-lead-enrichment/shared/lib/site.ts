@@ -169,7 +169,8 @@ export function normalizeWebsite(raw: string, company: string): SiteTarget | nul
   }
 }
 
-// Files/paths that can never hold team info (mirrors huntd's map-step filter).
+// Files/paths that can never hold team info — assets, feeds and binaries. Dropped
+// before ranking so the model never spends a slot on a stylesheet.
 const NON_CONTENT_PATH =
   /(?:^|\/)(?:sitemap(?:[_-][^/]*)?\.xml(?:\.gz)?|robots\.txt)$|\.(?:css|js|mjs|map|json|xml|pdf|jpe?g|png|gif|webp|svg|ico|woff2?|ttf|eot|zip|gz|mp[34]|webm|avi|mov)$/i;
 

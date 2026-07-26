@@ -1,15 +1,11 @@
 ---
 name: website-lead-enrichment
 description: >-
-  Turn a list of company websites into their team members (name, title) and emails —
-  lead gen where contacts live only on the companies' own sites. EXTRACT real people
-  + business/contact emails (rank team pages, scrape, LLM-extract, Cloudflare decode);
-  DISCOVER missing emails on the open web via the optional Codex stage; PREDICT the rest
-  (MX + learn format + permute). Use when the user has company names/domains and wants
-  people + emails ("scrape team members", "find staff emails for these clinics",
-  "enrich this account list", "predict emails for people we found", "find the emails
-  we're missing"). NOT for: verifying a predicted address delivers (SMTP/catch-all is
-  downstream); scraping a single known page; lists that already have the people.
+  Use when a list of company websites or domains must become the named people who work
+  there and their email addresses - "scrape team members from these sites", "find staff
+  emails for these clinics", "enrich this account list", "find the emails we're missing",
+  "predict emails for the people we found". NOT for: checking whether an address actually
+  delivers, scraping one already-known page, or lists that already contain the people.
 license: MIT
 metadata:
   author: Lexdash-org

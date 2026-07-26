@@ -5,6 +5,29 @@
   "license": "MIT",
   "type": "module",
   "description": "Vertical-SaaS lead-gen agent: company websites -> team members + emails (scrape, harvest, Codex web-discovery, MX + pattern-learning + permutation).",
+  "keywords": [
+    "lead-generation",
+    "email-finder",
+    "web-scraping",
+    "agent-skill",
+    "claude-code",
+    "codex",
+    "sales",
+    "prospecting",
+    "b2b"
+  ],
+  "homepage": "https://github.com/Lexdash-org/vertical-saas-agent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lexdash-org/vertical-saas-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Lexdash-org/vertical-saas-agent/issues"
+  },
+  "author": "Lexdash",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "rank": "tsx skills/website-lead-enrichment/subskills/discover-team-pages/scripts/rank-batch.ts",
     "extract": "tsx skills/website-lead-enrichment/subskills/extract-team-members/scripts/run-batch.ts",
@@ -17,7 +40,8 @@
     "learn": "tsx skills/website-lead-enrichment/subskills/learn-email-patterns/scripts/learn-email-patterns.ts",
     "permute": "tsx skills/website-lead-enrichment/subskills/email-permutation/scripts/apply-permutation.ts",
     "typecheck": "tsc --noEmit",
-    "check": "tsx .github/scripts/validate-skills.ts . && tsx .github/scripts/check-invariants.ts"
+    "check": "tsx .github/scripts/validate-skills.ts . && tsx .github/scripts/check-invariants.ts && tsx .github/scripts/run-evals.ts",
+    "evals": "tsx .github/scripts/run-evals.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "2.0.114",

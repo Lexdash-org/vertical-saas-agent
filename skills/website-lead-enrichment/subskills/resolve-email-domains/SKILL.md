@@ -29,8 +29,8 @@ Do not scrape, do not probe SMTP, do not guess addresses.
 **This stage does not discover an alternate mail domain.** When MX records exist,
 `emailDomain` is set to the domain that was checked. It is a yes/no deliverability check
 on a domain you already have, not a resolver that finds the look-alike domain a company
-sends from. Discovering that a company's site is on `gethuntd.com` while its mail is on
-`tryhuntd.com` is **not** something this pipeline does — the business-email domain from
+sends from. Discovering that a company's site is on `getexample.com` while its mail is on
+`tryexample.com` is **not** something this pipeline does — the business-email domain from
 stages 3 and 4 is the only mechanism that surfaces such a domain.
 
 ## Workflow
