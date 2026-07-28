@@ -4,7 +4,8 @@ import { FREEMAIL, PLACEHOLDER, ROLE, VENDOR } from '../lib/emails.js';
 import { normalizeWebsite, parseCsv, csvCell } from '../lib/site.js';
 import { fetchPage } from '../lib/scrape.js';
 import { MASTER_CSV, ledgerPath, loadEnv, readMaster, writeAtomic } from '../lib/paths.js';
-import { argVal, requireInput, requireColumn } from '../lib/cli.js';
+import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * Second-pass email recovery: for domains that STILL have no email after the
@@ -113,7 +114,7 @@ async function harvest(target: { key: string; company: string; original: string 
     out.businessEmails = business;
     out.otherEmails = other;
   } catch (err) {
-    out.error = err instanceof Error ? err.message : String(err);
+    out.error = brief(err); // this record is appended to the ledger
   }
   return out;
 }
@@ -212,7 +213,4 @@ async function render(): Promise<void> {
   console.log(`\nrendered ${pending.length} domains · recovered a business email on ${recovered} (${(recovered / pending.length * 100).toFixed(0)}% lift)`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(reportFatal);

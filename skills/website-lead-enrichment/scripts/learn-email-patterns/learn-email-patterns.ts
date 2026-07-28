@@ -4,7 +4,7 @@ import { ROLE_LOCALPART as ROLE } from '../lib/emails.js';
 import { llmClient, reasoningModel } from '../lib/llm.js';
 import { firstLast, buildEmail, isValidTemplate, PATTERNS } from '../lib/patterns.js';
 import { ledgerPath, loadEnv, readMaster, workPath } from '../lib/paths.js';
-import { argVal } from '../lib/cli.js';
+import { argVal, reportFatal } from '../lib/cli.js';
 
 /**
  * Learn each company's email FORMAT from the real emails we already have on that
@@ -211,4 +211,4 @@ Only output JSON.`;
   console.log(`\nWrote ${OUT_JSON} — ${Object.keys(obj).length} companies total`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch(reportFatal);

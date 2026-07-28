@@ -1,6 +1,7 @@
 import { findTeamPages } from './teamPages.js';
 import { loadEnv } from '../lib/paths.js';
-import { argVal } from '../lib/cli.js';
+import { argVal, die } from '../lib/cli.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * One website in -> shortlist out, on stdout.
@@ -39,6 +40,5 @@ try {
     }
   }
 } catch (err) {
-  console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
-  process.exit(1);
+  die(brief(err));
 }

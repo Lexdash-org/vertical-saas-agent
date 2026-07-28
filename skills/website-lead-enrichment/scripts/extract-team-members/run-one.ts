@@ -4,6 +4,7 @@ import { buildTeamExtractor, lunaClient, organizePeople } from './agent.js';
 import { extractionModel } from '../lib/llm.js';
 import { readEnv } from '../lib/env.js';
 import { COMPANIES_DIR, ensureDirs, loadEnv } from '../lib/paths.js';
+import { reportFatal } from '../lib/cli.js';
 
 /**
  * Website in -> [{name, title, email}] out.
@@ -66,7 +67,4 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(people, null, 2));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(reportFatal);

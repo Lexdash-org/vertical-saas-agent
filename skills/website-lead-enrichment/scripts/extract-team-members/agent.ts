@@ -3,6 +3,7 @@ import { createTool } from '@mastra/core/tools';
 import { createOpenAI } from '@ai-sdk/openai';
 import { llmClient, llmEndpoint, extractionModel, reasoningModel } from '../lib/llm.js';
 import { z } from 'zod';
+import { brief } from '../lib/redact.js';
 import {
   extractPeopleFromPage,
   fetchPage,
@@ -146,7 +147,7 @@ export function buildTeamExtractor() {
           links: page.links.map((l) => `${l.url}${l.text ? ` — ${l.text}` : ''}`),
         };
       } catch (err) {
-        return { url: context.url, error: err instanceof Error ? err.message : String(err) };
+        return { url: context.url, error: brief(err) };
       }
     },
   });
@@ -166,7 +167,7 @@ export function buildTeamExtractor() {
         session.rawPeople.push(...people);
         return { url: page.url, ...pageSummary(page), ...peopleResult(people) };
       } catch (err) {
-        return { url: context.url, error: err instanceof Error ? err.message : String(err) };
+        return { url: context.url, error: brief(err) };
       }
     },
   });
@@ -200,7 +201,7 @@ export function buildTeamExtractor() {
         session.rawPeople.push(...people);
         return { capturedFrom: capture.url, ...peopleResult(people) };
       } catch (err) {
-        return { error: err instanceof Error ? err.message : String(err) };
+        return { error: brief(err) };
       }
     },
   });

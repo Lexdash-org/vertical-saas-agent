@@ -5,7 +5,8 @@ import { csvCell, isSiteReachable, normalizeWebsite, parseCsv, type SiteRankReco
 import { findTeamPages } from './teamPages.js';
 import { clientsFromEnv } from '../lib/llm.js';
 import { ledgerPath, loadEnv, workPath } from '../lib/paths.js';
-import { argVal, hasFlag, requireInput, requireColumn } from '../lib/cli.js';
+import { argVal, hasFlag, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * Team-scraper step 1: for every website in the input CSV, Firecrawl-map the
@@ -157,7 +158,7 @@ async function main(): Promise<void> {
               (top ? `, top: ${top.url} (${top.score})` : ''),
           );
         } catch (err) {
-          rec.error = err instanceof Error ? err.message : String(err);
+          rec.error = brief(err); // reaches the ledger and the failures CSV
           // Mapping failing can mean two very different things: a big or slow site that
           // Firecrawl gave up on, or a host that is simply gone. One plain request tells
           // them apart for free, and stage 2 skips the dead ones instead of spending its
@@ -181,7 +182,4 @@ async function main(): Promise<void> {
   console.log(`\nWrote ${OUT_CSV} (${all.length} sites, ${failed} failed)`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(reportFatal);

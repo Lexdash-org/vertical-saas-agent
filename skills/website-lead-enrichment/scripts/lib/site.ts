@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { z } from 'zod';
 import type { Firecrawl } from 'firecrawl';
 import type OpenAI from 'openai';
+import { messageOf, statusOf } from './redact.js';
 
 /**
  * Step 1 of the team-member scraper: website -> Firecrawl map -> LLM-ranked
@@ -228,9 +229,14 @@ export async function mapSite(
       return (data.links ?? []).map((l) => ({ url: l.url, title: l.title, description: l.description }));
     } catch (err) {
       lastErr = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      // Payment/auth problems will not heal on retry.
-      if (/402|401|payment|unauthorized/i.test(msg)) throw err;
+      // Payment/auth problems will not heal on retry. The status is read off the error
+      // object first: an SDK that sets `status: 401` without putting the digits in the
+      // message used to be retried three times here while the health check correctly
+      // called the key rejected — one error, two verdicts. The word test stays for
+      // providers that report neither.
+      if ([401, 402, 403].includes(statusOf(err) ?? 0) || /payment|unauthorized/i.test(messageOf(err))) {
+        throw err;
+      }
       if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 2000));
     }
   }

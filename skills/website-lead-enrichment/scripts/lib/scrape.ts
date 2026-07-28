@@ -1,6 +1,7 @@
 import type OpenAI from 'openai';
 import { z } from 'zod';
 import { requireEnv } from './env.js';
+import { messageOf, redact } from './redact.js';
 
 /**
  * Team-member extractor building blocks: fast Zyte fetch (static HTML first,
@@ -187,8 +188,11 @@ async function zyteExtract(
         signal: AbortSignal.timeout(timeout),
       });
       if (!res.ok) {
+        // Redacted at the throw, not at the print: this message is caught by callers that
+        // write it into a ledger and into an output CSV, so sanitising only the console
+        // would leave the credential on disk.
         const errBody = await res.text().catch(() => '');
-        throw new Error(`Zyte ${label} ${res.status}: ${errBody.slice(0, 160)}`);
+        throw new Error(`Zyte ${label} ${res.status}: ${redact(errBody).slice(0, 160)}`);
       }
       const json = (await res.json()) as {
         httpResponseBody?: string;
@@ -209,7 +213,8 @@ async function zyteExtract(
       throw new Error(`Zyte: empty ${label} response`);
     } catch (err) {
       lastErr = err;
-      const msg = err instanceof Error ? `${err.message} ${(err.cause as Error | undefined)?.message ?? ''}` : String(err);
+      // Cause chain included: Undici reports the real network fault there, not in `message`.
+      const msg = `${messageOf(err)} ${messageOf((err as { cause?: unknown })?.cause ?? '')}`;
       if (attempt < 2 && RETRYABLE.test(msg)) {
         await new Promise((r) => setTimeout(r, 300 * 2 ** attempt));
         continue;
@@ -222,8 +227,13 @@ async function zyteExtract(
 
 /**
  * mode "static" = raw HTTP response body (fast, ~1-3s); "rendered" = browserHtml.
+ *
+ * Exported for the provider health check, which must make *the* Zyte call the pipeline
+ * makes — a hand-rolled second copy would keep reporting green after this one changed.
+ * Not `fetchPage`: that escalates to a browser render whenever the static text is under
+ * `JS_SHELL_TEXT_CHARS`, so probing a small page would burn a 60-second rendered credit.
  */
-async function zyteFetch(url: string, apiKey: string, mode: 'static' | 'rendered'): Promise<ZyteResult> {
+export async function zyteFetch(url: string, apiKey: string, mode: 'static' | 'rendered'): Promise<ZyteResult> {
   const target = url.replace(/^http:\/\//i, 'https://');
   const body =
     mode === 'static'

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../lib/site.js';
 import { MASTER_CSV, ensureDirs, ledgerPath, workPath } from '../lib/paths.js';
-import { argVal, requireInput, requireColumn } from '../lib/cli.js';
+import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
 import { resolveEmailDomain } from './mxEmailDomain.js';
 
 /**
@@ -149,7 +149,4 @@ async function main(): Promise<void> {
   console.log(`\nWrote ${OUT_CSV}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(reportFatal);

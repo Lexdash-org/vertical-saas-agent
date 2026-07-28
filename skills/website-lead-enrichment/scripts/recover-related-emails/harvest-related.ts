@@ -4,7 +4,8 @@ import { PLACEHOLDER, ROLE, VENDOR } from '../lib/emails.js';
 import { normalizeWebsite, parseCsv, csvCell } from '../lib/site.js';
 import { EmailSources, fetchPage } from '../lib/scrape.js';
 import { MASTER_CSV, ledgerPath, loadEnv, readMaster, writeAtomic } from '../lib/paths.js';
-import { argVal, requireInput, requireColumn } from '../lib/cli.js';
+import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * Third-pass recovery for domains that still have NO email: static re-scrape of
@@ -103,7 +104,7 @@ async function harvest(t: { key: string; company: string; original: string }): P
     out.relatedEmails = related;
     out.sources = emails.sourceMap([...own, ...related]);
   } catch (err) {
-    out.error = err instanceof Error ? err.message : String(err);
+    out.error = brief(err); // this record is appended to the ledger
   }
   return out;
 }
@@ -235,7 +236,4 @@ async function scrape(): Promise<void> {
   console.log(`\nre-scraped ${pending.length} · ${ownHits} gained an OWN business email, ${relHits} a RELATED email`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(reportFatal);

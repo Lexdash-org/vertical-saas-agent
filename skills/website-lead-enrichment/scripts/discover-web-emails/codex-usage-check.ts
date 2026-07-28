@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 import { resolveCodex, describeCodex } from '../lib/codex.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * Report the Codex weekly rate-limit and usage figures the stage-5 throttle depends on.
@@ -73,7 +74,7 @@ lines.on('line', (line) => {
 });
 
 proc.on('error', (error: Error) => {
-  console.error(`could not run ${codex.bin}: ${error.message}`);
+  console.error(`could not run ${codex.bin}: ${brief(error)}`);
   process.exitCode = 1;
 });
 

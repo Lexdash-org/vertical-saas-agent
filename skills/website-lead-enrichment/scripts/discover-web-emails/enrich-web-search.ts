@@ -4,9 +4,10 @@ import { spawn } from 'node:child_process';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../lib/site.js';
 import { MASTER_CSV, ledgerPath, loadEnv, readMaster, workPath, writeAtomic } from '../lib/paths.js';
-import { argVal, die, requireInput } from '../lib/cli.js';
+import { argVal, die, reportFatal, requireInput } from '../lib/cli.js';
 import { resolveCodex } from '../lib/codex.js';
 import { readEnv } from '../lib/env.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * Final-stage enrichment: for people with NO scraped email, web-search the open
@@ -357,10 +358,10 @@ async function main(): Promise<void> {
           }
         } catch (err) {
           if (err instanceof RateLimit) {
-            if (!stopped) { stopped = true; console.error(`\n⏸ RATE LIMIT reached — stopping cleanly. ${done2} done this pass, ${hits} found. Re-run later to resume.\n   signal: ${err.message}`); }
+            if (!stopped) { stopped = true; console.error(`\n⏸ RATE LIMIT reached — stopping cleanly. ${done2} done this pass, ${hits} found. Re-run later to resume.\n   signal: ${brief(err)}`); }
             return;
           }
-          fs.appendFileSync(LEDGER, JSON.stringify({ rowId: t.rowId, domain: t.domain, name: t.name, error: err instanceof Error ? err.message.slice(0, 120) : String(err) }) + '\n');
+          fs.appendFileSync(LEDGER, JSON.stringify({ rowId: t.rowId, domain: t.domain, name: t.name, error: brief(err, 120) }) + '\n');
           done2++;
         }
       }),
@@ -371,4 +372,4 @@ async function main(): Promise<void> {
   console.log(`\nweb-search pass: ${done2} searched · ${hits} usable emails found · master best_email upgraded on ${added} rows${stopped ? ' (stopped on rate limit — resume later)' : ''}`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch(reportFatal);

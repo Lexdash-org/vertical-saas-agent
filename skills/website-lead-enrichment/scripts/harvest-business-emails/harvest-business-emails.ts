@@ -4,7 +4,8 @@ import { FREEMAIL, PLACEHOLDER, ROLE, VENDOR } from '../lib/emails.js';
 import { csvCell, normalizeWebsite, parseCsv } from '../lib/site.js';
 import { EmailSources, fetchPage } from '../lib/scrape.js';
 import { MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../lib/paths.js';
-import { argVal, requireInput, requireColumn } from '../lib/cli.js';
+import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * Harvest BUSINESS/CONTACT emails per domain (info@, reception@, admin@, …) and
@@ -110,7 +111,7 @@ async function harvest(target: { key: string; company: string; original: string 
     out.otherEmails = other;
     out.businessEmailSourceUrl = business[0] ? emails.sourceOf(business[0]) : '';
   } catch (err) {
-    out.error = err instanceof Error ? err.message : String(err);
+    out.error = brief(err); // this record is appended to the ledger
   }
   return out;
 }
@@ -242,7 +243,4 @@ async function main(): Promise<void> {
   console.log(`business-emails.csv written · master rows now carrying a business email: ${filled}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(reportFatal);

@@ -40,6 +40,16 @@ export const ENV = {
 
 export type EnvKey = keyof typeof ENV;
 
+/**
+ * Which of the above hold a secret, declared here because this file owns the vocabulary.
+ *
+ * `lib/redact.ts` removes these values from anything a provider says back to us. Keeping
+ * the list next to `ENV` is the point: a fourth credential added to `ENV` with a private
+ * copy of this list elsewhere would silently stop being redacted, and nothing would fail —
+ * the value would simply start appearing in ledgers.
+ */
+export const SECRET_KEYS = ['firecrawlKey', 'zyteKey', 'llmKey'] as const satisfies readonly EnvKey[];
+
 /** Where the one config file lives, for error messages. Kept here so it reads the same everywhere. */
 export const CONFIG_HINT = '~/.leadgen/.env';
 

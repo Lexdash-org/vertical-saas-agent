@@ -13,7 +13,8 @@ import { buildTeamExtractor, lunaClient, organizePeople } from './agent.js';
 import { extractPeopleFromPage, fetchPage, type Person } from '../lib/scrape.js';
 import { extractionModel } from '../lib/llm.js';
 import { COMPANIES_DIR, MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../lib/paths.js';
-import { argVal, requireInput, requireColumn } from '../lib/cli.js';
+import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
+import { brief } from '../lib/redact.js';
 
 /**
  * Full pipeline over a CSV of websites:
@@ -375,7 +376,7 @@ async function processSite(
       }
     } catch (err) {
       console.log(
-        `  [${target.key}] shortlist unavailable (${err instanceof Error ? err.message.slice(0, 60) : err}) — agent will explore unseeded`,
+        `  [${target.key}] shortlist unavailable (${brief(err, 60)}) — agent will explore unseeded`,
       );
     }
 
@@ -436,7 +437,7 @@ async function processSite(
       `✓ ${target.key} — ${outcome.people.length} people · ${outcome.visits} fetch(es) · ${(outcome.ms / 1000).toFixed(0)}s`,
     );
   } catch (err) {
-    outcome.error = err instanceof Error ? err.message : String(err);
+    outcome.error = brief(err); // reaches the ledger and the console
     outcome.ms = Date.now() - t0;
     console.error(`✗ ${target.key} — ${outcome.error}`);
   }
@@ -524,7 +525,4 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+main().catch(reportFatal);
