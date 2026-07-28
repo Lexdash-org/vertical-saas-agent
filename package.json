@@ -40,7 +40,7 @@
     "learn": "tsx skills/website-lead-enrichment/scripts/learn-email-patterns/learn-email-patterns.ts",
     "permute": "tsx skills/website-lead-enrichment/scripts/email-permutation/apply-permutation.ts",
     "doctor": "tsx skills/website-lead-enrichment/scripts/doctor/doctor.ts",
-    "test": "tsx --test \"skills/website-lead-enrichment/scripts/**/*.test.ts\"",
+    "test": "tsx --test skills/website-lead-enrichment/scripts/lib/*.test.ts",
     "typecheck": "tsc --noEmit",
     "check": "npm test && tsx .github/scripts/validate-skills.ts . && tsx .github/scripts/check-invariants.ts && tsx .github/scripts/run-evals.ts",
     "evals": "tsx .github/scripts/run-evals.ts"

@@ -118,7 +118,9 @@ Credentials live in `~/.leadgen/.env`, not in the repo. Results default to `./ou
 whatever directory the user runs from.
 
 The unit suite is new and small: `npm test` runs `node --test` over
-`skills/**/*.test.ts`, and `scripts/lib/redact.test.ts` is the only file in it so far.
+`scripts/lib/*.test.ts`, and `redact.test.ts` is the only file in it so far. The glob is
+shell-expanded and single-level on purpose — `node --test` only learned to expand `**`
+itself in Node 21, and `engines` says 20.
 Growing it is the most useful contribution available. Start with the rest of
 `scripts/lib/` — it is pure and has no I/O. Behaviour of a function belongs there, not in
 `check-invariants.ts`, which is for facts about the shape of the repo that a test cannot
