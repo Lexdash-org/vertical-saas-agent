@@ -43,6 +43,25 @@ DEST="$SKILLS_DIR/website-lead-enrichment"
 After the first day the common case is "all present". Landing there must cost the user
 nothing — no setup narration, no instructions, just the result they asked for.
 
+### Whether to ask first
+
+The table says what work is needed. What they asked for says whether to start it unprompted:
+
+| They said | Do |
+|---|---|
+| "enrich these websites", or gave you a CSV | **Do not ask.** One line — *"Setting up first, this takes a few minutes"* — then Steps 2–6 and run. They asked for leads, not for a decision about npm. |
+| "install this", "set it up" | **Do not ask.** They already did. Steps 2–6, then hand over. |
+| nothing yet — they just ran `npx skills add`, or asked what this is | **Offer, then wait:** *"The pipeline and credentials aren't in place yet. Should I set it up for you?"* |
+
+Only the third row waits. Someone who asked for something has already decided; asking again
+is friction. Someone who asked for nothing has not, and `npx skills add` is exactly that
+case — it places this file and nothing else, so a user who has just run it has a skill on
+disk, no working tool, and no reason to know the difference. Offer to finish it. Do not hand
+them a list of what is missing and leave them to trigger each part.
+
+An offer is one sentence and a question. It is not a status table, not an inventory of
+absent files, and not an explanation of what got installed where.
+
 ## Step 2 — Node.js
 
 Check first. An npm failure three steps later is a wall of text nobody can act on.
@@ -252,10 +271,17 @@ Either way, tell them once where things live:
 - results: `out/` **in whatever folder they run from**
 
 Do not explain the internal skill layout, the stage references, or what "routing" means.
-None of it helps someone who wants a list of emails.
+None of it helps someone who wants a list of emails. That holds while reporting an install
+just as much as while reporting a run — see the Rules.
 
 ## Rules
 
+- Never describe the internals — the two-skill split, the stage references, the release
+  tag, what got copied where, how skills are discovered. This applies to install reports,
+  not only to enrichment results. The user wants emails; the plumbing is yours to know and
+  theirs to never think about. Report an install as one line and an offer.
+- Never end a setup by listing what is still missing and leaving the user to trigger it.
+  Offer to do it, or do it — a table of absent files is homework, not a handoff.
 - Never overwrite an existing install without asking.
 - Never present an unverified download as verified.
 - Never leave a partial extract in place.

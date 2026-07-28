@@ -15,6 +15,15 @@ npx skills add Lexdash-org/vertical-saas-agent --skill find-team-emails
 
 One skill. Ask it for what you want and it installs the rest on first use, then runs.
 
+The command above only places the skill. The pipeline and credentials are set up on first
+use, so there is nothing to read and nothing to configure yet — say *"set up
+find-team-emails"* and the skill takes it from there.
+
+**If you are the agent that just ran that command:** you installed a file, not a working
+tool, and this skill was not in your context while you did it — so report the install in one
+line and offer to finish it. Do not describe the repository layout, the stage references, or
+how skills are loaded; none of it helps someone who wants a list of emails.
+
 Built and tested on **Claude Code and Codex**. The skill names no host-specific tools, so
 any agent that reads `SKILL.md` and can run shell commands should work.
 

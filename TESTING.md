@@ -80,6 +80,8 @@ claude
 | Check | Pass |
 |---|---|
 | Finds the install skill | yes |
+| Installs without asking — they already said "install" | yes |
+| Reports no repo internals: no two-skill split, no stage-reference count, no release tag | yes |
 | Copies `package.json`, `tsconfig.json`, `.env.example`, `examples/` alongside the skill | yes |
 | Runs `npm install` **inside** the installed folder | yes |
 | Creates `~/.leadgen/.env` and walks through the keys | yes |
@@ -89,6 +91,28 @@ claude
 
 The skill must end up self-contained: `node_modules/` and `package.json` inside the
 installed folder. Without them every stage throws at startup.
+
+### 2a. The same user, one turn earlier
+
+The case that produced the report this checklist exists to prevent. Install via the CLI, so
+the skill lands mid-session and nobody has asked for anything:
+
+```bash
+mkdir -p /tmp/fresh-cli && cd /tmp/fresh-cli
+npx skills add Lexdash-org/vertical-saas-agent --skill find-team-emails
+```
+
+Then start a **new** session — the skill is only discovered at startup — and say nothing
+about enrichment:
+
+> is that thing set up?
+
+| Check | Pass |
+|---|---|
+| Offers — *"Should I set it up for you?"* — rather than reporting and stopping | yes |
+| Waits for the answer instead of installing anyway | yes |
+| Does not print a table of missing files, paths, or what installs when | yes |
+| Does not explain that there are two skills | yes |
 
 ## 3. The no-fallback pressure test
 
