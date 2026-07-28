@@ -96,21 +96,26 @@ whether to continue — never present an unverified download as verified.
 
 ## Step 4 — Assemble and install
 
-One list drives both the copy and the check, so they cannot drift apart:
+One list drives both the copy and the check, so they cannot drift apart. It is held in the
+positional parameters rather than a string, because `for item in $NEEDS` splits into five
+entries under bash and stays one impossible filename under zsh — the default shell on macOS,
+where it aborts every install:
 
 ```bash
-SRC=$(echo /tmp/vertical-saas-agent-*)     # or the checkout found in step 3
-NEEDS="package.json .npmrc tsconfig.json .env.example examples/input"
+# The extracted release, or set SRC to the checkout step 3 found instead.
+SRC=$(find -L /tmp -maxdepth 1 -type d -name 'vertical-saas-agent-*' 2>/dev/null | head -1)
+[ -n "$SRC" ] || { echo "no source tree — go back to step 3"; exit 1; }
+set -- package.json .npmrc tsconfig.json .env.example examples/input
 
 mkdir -p "$DEST"
 cp -R "$SRC/skills/website-lead-enrichment/." "$DEST/"
-for item in $NEEDS; do
+for item in "$@"; do
   mkdir -p "$DEST/$(dirname "$item")"
   cp -R "$SRC/$item" "$DEST/$item"
 done
 
 fail=0
-for item in SKILL.md scripts/lib/paths.ts $NEEDS; do
+for item in SKILL.md scripts/lib/paths.ts "$@"; do
   [ -e "$DEST/$item" ] || { echo "MISSING: $item"; fail=1; }
 done
 [ "$(ls "$DEST"/references/[0-9][0-9]-*.md 2>/dev/null | wc -l)" -eq 8 ] || { echo "MISSING: stage references"; fail=1; }

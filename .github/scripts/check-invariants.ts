@@ -278,6 +278,40 @@ check('one role-inbox vocabulary', () => {
   return `declared once, in ${home.split('/').pop()}`;
 });
 
+/**
+ * A shell block in a shipped doc runs in whatever shell the user's agent has, and on macOS
+ * that is zsh — which does not word-split an unquoted parameter. `for item in $NEEDS` is
+ * five filenames under bash and one impossible one under zsh, so the install step aborted
+ * for every macOS user while CI stayed green: the install job pins `shell: bash`, so it
+ * cannot see this class of bug at all.
+ *
+ * Only fenced blocks are scanned — prose citing the broken form to warn against it, as the
+ * install step now does, is the opposite of shipping it. Quoted spans are dropped first,
+ * which is what makes `"$@"` and `"$SKILLS_DIR/..."` legal: both survive any shell.
+ */
+check('shell blocks do not rely on word-splitting', () => {
+  const FOR_LINE = /^\s*for\s+\w+\s+in\s+([^;]*?)(?:;|\s\bdo\b|$)/;
+  const offenders: string[] = [];
+  const docs = [...walk('skills', '.md'), 'README.md', 'TESTING.md'];
+  for (const file of docs) {
+    let fenced = false;
+    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+      if (line.trimStart().startsWith('```')) { fenced = !fenced; return; }
+      if (!fenced) return;
+      const list = FOR_LINE.exec(line)?.[1];
+      if (list === undefined) return;
+      const unquoted = list.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
+      if (unquoted.includes('$')) offenders.push(`${file}:${i + 1} → ${line.trim()}`);
+    });
+  }
+  if (offenders.length) {
+    throw new Error(
+      `unquoted expansion in a for-list — splits under bash, not under zsh:\n    ${offenders.join('\n    ')}`,
+    );
+  }
+  return `${docs.length} docs, every for-list shell-independent`;
+});
+
 check('no invented Codex quota rate', () => {
   const rate = /\d+\s*%[^.]{0,40}\bper\b[^.]{0,30}\bsearch(es)?\b/i;
   // Whitespace is collapsed before matching, so a line break cannot hide the claim — a

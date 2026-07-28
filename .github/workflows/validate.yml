@@ -78,14 +78,14 @@ jobs:
         run: |
           set -euo pipefail
           DEST="$RUNNER_TEMP/skills/website-lead-enrichment"
-          NEEDS="package.json .npmrc tsconfig.json .env.example examples/input"
+          set -- package.json .npmrc tsconfig.json .env.example examples/input
           mkdir -p "$DEST"
           cp -R skills/website-lead-enrichment/. "$DEST/"
-          for item in $NEEDS; do
+          for item in "$@"; do
             mkdir -p "$DEST/$(dirname "$item")"
             cp -R "$item" "$DEST/$item"
           done
-          for item in SKILL.md scripts/lib/paths.ts $NEEDS; do
+          for item in SKILL.md scripts/lib/paths.ts "$@"; do
             [ -e "$DEST/$item" ] || { echo "MISSING: $item"; exit 1; }
           done
           [ "$(ls "$DEST"/references/[0-9][0-9]-*.md | wc -l)" -eq 8 ] || { echo "MISSING: stage references"; exit 1; }
