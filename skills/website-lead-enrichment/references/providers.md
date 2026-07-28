@@ -71,6 +71,22 @@ LEADGEN_LLM_BASE_URL=https://<resource>.cognitiveservices.azure.com/openai/v1/
 LEADGEN_LLM_MODEL_REASONING=<deployment name>
 ```
 
+### Azure: the two ways the model name goes wrong
+
+Both are configuration errors, they are the most common thing to get wrong here, and they
+look nothing alike. `scripts/doctor/doctor.ts` names them; this is what it is telling you:
+
+| Response | Meaning | Fix |
+|---|---|---|
+| `404 deployment does not exist` | No deployment on this resource carries that name | Copy the exact name from Azure AI Foundry → **Deployments** |
+| `400 operation not allowed in this deployment` | The deployment exists, but not for chat completions | It is almost always a **Global Batch** deployment — redeploy as Standard or Global Standard |
+
+**`GET /openai/v1/models` does not list your deployments.** It returns the model *catalog*
+for the region — every model Azure could offer you, whether or not you have deployed one.
+Pasting a name from that list produces a confident-looking configuration in which every
+call 404s, and the response gives no hint that the name came from the wrong list. The
+deployments blade in the portal is the only authority on what a valid model name is here.
+
 Two roles exist because the jobs differ: **reasoning** ranks pages and adjudicates
 ambiguous email formats; **extraction** pulls structured records out of page text. One
 model can fill both — point the two variables at the same name, or set only the reasoning
@@ -120,6 +136,11 @@ runs against a **weekly** quota — see `./05-discover-web-emails.md` for the th
 Before starting a run, check the keys the selected stages need and report every missing
 one at once rather than failing at the first stage that touches a provider.
 
+`scripts/doctor/doctor.ts` does exactly that — one cheap call per configured provider,
+PASS/FAIL/SKIP per line, non-zero exit only if something *configured* is broken. Run it
+instead of reasoning about which variables are present: a key that is set but rejected
+reads identically to a working one until something calls it.
+
 The LLM needs `LEADGEN_LLM_API_KEY` and `LEADGEN_LLM_MODEL_REASONING`. There is one
 provider path, so there is no either/or to reason about: if those two are set, the LLM is
 configured.
@@ -137,6 +158,11 @@ trusted, because an absolute path copied between machines goes stale silently.
 ## Never do
 
 - Print, log, or echo a credential value, including into a ledger or an error message.
+  This one is enforced, not merely asked for: `scripts/lib/redact.ts` is the single
+  redactor, stages exit through `reportFatal` and record caught errors through `brief`,
+  and a CI invariant rejects any code that prints or stores an error message raw. It
+  matters because a provider's own 401 body can quote the key back — OpenAI's gives up
+  the first eight and last four characters of it.
 - Copy `~/.leadgen/.env` into the skill folder or any distributed artifact.
 - Commit a real key. `.env` is gitignored; `.env.example` carries placeholders only.
 - Suggest putting a key in a shell profile. This project reads one file; a credential in

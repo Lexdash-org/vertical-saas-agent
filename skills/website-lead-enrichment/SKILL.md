@@ -31,7 +31,9 @@ document under `references/` — read it before running that stage.
    Playwright, or a search engine.
 2. Read `references/pipeline-state.md` — the master CSV schema, the basis vocabulary, ledgers
    and resume, and the rule that **no two master-writing stages run at once**.
-3. Check the keys and report every missing one together, not one stage at a time.
+3. Check the keys and report every missing one together, not one stage at a time — run
+   `scripts/doctor/doctor.ts`, which calls each configured provider once and reports them
+   all. A key that is set but rejected looks exactly like a working one until it is called.
 4. Confirm you have the input CSV path and which column holds the website.
 
 ### Setup is a prerequisite, not an option
