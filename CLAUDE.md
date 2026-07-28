@@ -59,6 +59,14 @@ else calls `readEnv('zyteKey')`. A mistyped name must be a compile error, not a 
 "key not set" — which is indistinguishable from a user who never configured anything. CI
 rejects a hard-coded name anywhere else.
 
+**A caught error may never be printed or stored raw.** `scripts/lib/redact.ts` is the one
+redactor; stages exit through `reportFatal` and record failures through `brief`. A provider's
+own 401 body can quote the key back — OpenAI's gives up the first eight and last four
+characters — and that text reaches three places at once: the console, the ledgers and
+failures CSV on disk, and the extraction agent's tool output, which sends it to the model.
+Sanitising only what is displayed leaves the other two. CI rejects `console.error(err)` and
+raw `.message` extraction anywhere else.
+
 **TypeScript only.** Every script is `.ts`, run through `tsx`. No build step, no
 `.js`/`.mjs`/`.cjs`, no Python. A contributor should never have to work out which runtime a
 file needs.
@@ -109,8 +117,12 @@ export LEADGEN_OUT_DIR=/tmp/test-out  # instead of ./out in the current folder
 Credentials live in `~/.leadgen/.env`, not in the repo. Results default to `./out` in
 whatever directory the user runs from.
 
-There is no unit test suite — that is the project's biggest gap, and contributions adding
-one are welcome. Start with `scripts/lib/`, which is pure and has no I/O.
+The unit suite is new and small: `npm test` runs `node --test` over
+`skills/**/*.test.ts`, and `scripts/lib/redact.test.ts` is the only file in it so far.
+Growing it is the most useful contribution available. Start with the rest of
+`scripts/lib/` — it is pure and has no I/O. Behaviour of a function belongs there, not in
+`check-invariants.ts`, which is for facts about the shape of the repo that a test cannot
+see: no second copy of the pattern table, no hard-coded environment variable name.
 
 If your change affects how the *agent* behaves rather than what the code computes, run the
 matching scenario in [TESTING.md](TESTING.md) and say what happened. That is the only way

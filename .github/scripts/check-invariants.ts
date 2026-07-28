@@ -10,7 +10,8 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { ENV } from '../../skills/website-lead-enrichment/scripts/lib/env.js';
+import ts from 'typescript';
+import { ENV, SECRET_KEYS } from '../../skills/website-lead-enrichment/scripts/lib/env.js';
 import { candidates } from '../../skills/website-lead-enrichment/scripts/email-permutation/permute.js';
 import { PATTERNS, displayName, firstLast } from '../../skills/website-lead-enrichment/scripts/lib/patterns.js';
 import { basisToStatus } from '../../skills/website-lead-enrichment/scripts/lib/basis.js';
@@ -289,27 +290,260 @@ check('one role-inbox vocabulary', () => {
  * install step now does, is the opposite of shipping it. Quoted spans are dropped first,
  * which is what makes `"$@"` and `"$SKILLS_DIR/..."` legal: both survive any shell.
  */
-check('shell blocks do not rely on word-splitting', () => {
-  const FOR_LINE = /^\s*for\s+\w+\s+in\s+([^;]*?)(?:;|\s\bdo\b|$)/;
-  const offenders: string[] = [];
-  const docs = [...walk('skills', '.md'), 'README.md', 'TESTING.md'];
-  for (const file of docs) {
-    let fenced = false;
-    fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-      if (line.trimStart().startsWith('```')) { fenced = !fenced; return; }
-      if (!fenced) return;
-      const list = FOR_LINE.exec(line)?.[1];
-      if (list === undefined) return;
-      const unquoted = list.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
-      if (unquoted.includes('$')) offenders.push(`${file}:${i + 1} → ${line.trim()}`);
-    });
+/** Every shipped document whose fenced blocks a user's agent will actually execute. */
+const DOCS = [...walk('skills', '.md'), 'README.md', 'TESTING.md'];
+
+interface ShellLine { file: string; lineNo: number; line: string; }
+
+/** Every line inside a fenced block, across the shipped docs. Walked once. */
+const FENCED_SHELL_LINES: ShellLine[] = DOCS.flatMap((file) => {
+  const out: ShellLine[] = [];
+  let fenced = false;
+  fs.readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+    if (line.trimStart().startsWith('```')) { fenced = !fenced; return; }
+    if (fenced) out.push({ file, lineNo: i + 1, line });
+  });
+  return out;
+});
+
+/**
+ * The word list of every `for … in …` inside a fenced block, with quoted spans removed —
+ * those are literals and survive any shell. One scanner, because two hand-copied copies of
+ * it had already disagreed about whether `$(…)` counts as part of the list, which is the
+ * same duplicate-source-of-truth failure this file exists to reject everywhere else.
+ */
+const FOR_LISTS: (ShellLine & { list: string })[] = FENCED_SHELL_LINES.flatMap((s) => {
+  const list = /^\s*for\s+\w+\s+in\s+([^;]*?)(?:;|\s\bdo\b|$)/.exec(s.line)?.[1];
+  return list === undefined
+    ? []
+    : [{ ...s, list: list.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '') }];
+});
+
+/**
+ * Shell hazards that make a shipped block behave differently under bash and zsh.
+ *
+ * A shell block in a shipped doc runs in whatever shell the user's agent has, and on macOS
+ * that is zsh. The install job pins `shell: bash`, so it cannot see this class of bug at
+ * all — every one of these was found by a person on a Mac, after CI went green.
+ *
+ * Two hazards so far, pointing in opposite directions, which is why this is a table rather
+ * than a check: the third one someone finds is a row, not a third copy of the scanner.
+ */
+const SHELL_HAZARDS: { name: string; why: string; hit: (list: string) => boolean }[] = [
+  {
+    name: 'unquoted expansion in a for-list',
+    why: 'splits into words under bash and stays one impossible filename under zsh',
+    // `for item in $NEEDS` — five entries under bash, one under zsh, which aborted the
+    // install for every macOS user.
+    hit: (list) => list.includes('$'),
+  },
+  {
+    name: 'glob in a for-list',
+    why: 'a glob matching nothing aborts the whole block under zsh, where bash carries on',
+    // Command substitution may contain a glob — it runs in its own context, and its
+    // emptiness is a value rather than a fatal error.
+    hit: (list) => /[*?]|\[[^\]]+\]/.test(list.replace(/\$\([^)]*\)/g, '')),
+  },
+];
+
+check('shell blocks are shell-portable', () => {
+  // The rationale rides on the offending line rather than a fixed header, so a lone glob
+  // is not reported under a paragraph that also explains word-splitting.
+  const offenders = SHELL_HAZARDS.flatMap((h) =>
+    FOR_LISTS
+      .filter((f) => h.hit(f.list))
+      .map((f) => `${f.file}:${f.lineNo} — ${h.name}, which ${h.why}\n        ${f.line.trim()}`),
+  );
+  if (offenders.length) throw new Error(`shell blocks are not portable:\n    ${offenders.join('\n    ')}`);
+  return `${DOCS.length} docs, ${FOR_LISTS.length} for-lists, ${SHELL_HAZARDS.length} hazards clear`;
+});
+
+/**
+ * The install steps each re-derive `SKILLS_DIR` themselves, because a variable set in one
+ * fenced block is gone by the next — most agent runtimes give each command a fresh shell.
+ * That repetition is deliberate and cannot be factored out: at the point it first runs,
+ * nothing is installed yet, so there is no file to source it from.
+ *
+ * It is still *logic*, not a constant. Add a third runtime or an `XDG_DATA_HOME` rule and
+ * every copy has to move together — the same reason CLAUDE.md and AGENTS.md are compared
+ * rather than trusted.
+ */
+check('every re-derived install path agrees', () => {
+  // All four are re-derived per block and drift the same way. Guarding only SKILLS_DIR
+  // would leave DEST — the value every block actually consumes — unchecked.
+  // Every assignment on the line, not just the leading one. These derivations carry a
+  // fallback on the same line — `SKILLS_DIR=…claude…; [ -d … ] || SKILLS_DIR=…agents…` —
+  // and an earlier version compared only up to the first `;`, so the second assignment
+  // could drift freely. That is the `.agents` branch: the least-exercised install path,
+  // and the one a check exists to protect.
+  const ASSIGN = /\b(SKILLS_DIR|DEST|STAGE|CHECK)=("[^"]*"|\S*)/g;
+  const byName = new Map<string, Map<string, string>>();
+  for (const s of FENCED_SHELL_LINES) {
+    // The ordered set of values a line assigns to each name — order matters, since it is
+    // the fallback chain.
+    const perName = new Map<string, string[]>();
+    for (const m of s.line.matchAll(ASSIGN)) {
+      perName.set(m[1], [...(perName.get(m[1]) ?? []), m[2]]);
+    }
+    for (const [name, values] of perName) {
+      const derivation = values.join(' || ');
+      const spellings = byName.get(name) ?? new Map<string, string>();
+      // First location wins, so the failure names where the majority form lives.
+      if (!spellings.has(derivation)) spellings.set(derivation, `${s.file}:${s.lineNo}`);
+      byName.set(name, spellings);
+    }
   }
-  if (offenders.length) {
+  if (!byName.size) throw new Error('no install-path derivations found — did the install step move?');
+  const drifted = [...byName].filter(([, spellings]) => spellings.size > 1);
+  if (drifted.length) {
     throw new Error(
-      `unquoted expansion in a for-list — splits under bash, not under zsh:\n    ${offenders.join('\n    ')}`,
+      drifted
+        .map(([name, s]) => `${name} has ${s.size} spellings:\n    ${[...s].map(([t, w]) => `${w} → ${t}`).join('\n    ')}`)
+        .join('\n  '),
     );
   }
-  return `${docs.length} docs, every for-list shell-independent`;
+  return `${byName.size} names, each spelled one way`;
+});
+
+/**
+ * Every credential in `ENV` must be listed in `SECRET_KEYS`, or `redact` stops covering it.
+ *
+ * `SECRET_KEYS` sits next to `ENV` so the two are read together, but proximity is not
+ * enforcement: adding a fourth credential and forgetting the list fails *silently* — no
+ * compile error, no test failure, the value simply starts appearing in ledgers. The naming
+ * convention is the tell, so it is what gets checked.
+ */
+check('every credential is declared secret', () => {
+  const looksSecret = Object.keys(ENV).filter((k) => /Key$/.test(k));
+  if (!looksSecret.length) throw new Error('no *Key variables found — did ENV get renamed?');
+  const missing = looksSecret.filter((k) => !(SECRET_KEYS as readonly string[]).includes(k));
+  if (missing.length) {
+    throw new Error(`in ENV but absent from SECRET_KEYS, so redact() will not remove them: ${missing.join(', ')}`);
+  }
+  return `${looksSecret.length} credentials, all redacted`;
+});
+
+/**
+ * No stage may print or persist a caught error without redacting it first.
+ *
+ * `console.error(err)` prints the error object whole, and a provider's 401 body can quote
+ * the key back partially masked — OpenAI's does, giving up the first eight and last four
+ * characters. Nine stages ended exactly that way, so a mistyped key turned the ordinary
+ * crash path into a credential disclosure, in the output most likely to be pasted into a
+ * bug report. Two stages also wrote the raw message into a ledger and an output CSV, where
+ * sanitising the console alone would have left it on disk.
+ *
+ * `reportFatal` (lib/cli.ts) and `brief` (lib/redact.ts) are the sanctioned exits.
+ */
+/**
+ * The only functions allowed to receive a caught error directly.
+ *
+ * `explainLlmError` qualifies because it reads the error solely through `statusOf` and
+ * `messageOf` and returns fixed sentences — it never passes provider text through.
+ */
+const ERROR_SINKS = new Set([
+  'brief', 'messageOf', 'redact', 'reportFatal', 'statusOf', 'explainLlmError',
+]);
+
+/**
+ * Error fields that cannot carry a credential: numbers and short enum-ish codes.
+ *
+ * Reading `err.code` to tell ENOTFOUND from ETIMEDOUT is not a disclosure risk, and
+ * forcing it through a redactor would be cargo cult. `message`, `stack`, `cause`,
+ * `response` and `body` are deliberately absent — those carry the provider's own words.
+ */
+const SAFE_ERROR_PROPS = new Set(['code', 'errno', 'status', 'statusCode', 'name']);
+
+/**
+ * Is this reference to a caught error safe?
+ *
+ * Safe means the raw value cannot reach a terminal, a file, or a model from here:
+ *   - it is an argument to a redactor (`brief(err)`, `messageOf(err.cause)`)
+ *   - it is being type-tested (`err instanceof Error`)
+ *   - it is re-thrown, or stored for a later re-throw (`lastErr = err`)
+ *
+ * Storing is allowed without following the alias, which is the one thing this does not
+ * prove. Both current cases (`scrape.ts`, `site.ts`) store only to `throw` later.
+ */
+function isSafeUse(ref: ts.Identifier): boolean {
+  let node: ts.Node = ref;
+  while (node.parent && !ts.isCatchClause(node.parent)) {
+    const parent = node.parent;
+    if (ts.isCallExpression(parent)) {
+      const callee = parent.expression;
+      const calleeName = ts.isIdentifier(callee)
+        ? callee.text
+        : ts.isPropertyAccessExpression(callee)
+          ? callee.name.text
+          : '';
+      if (ERROR_SINKS.has(calleeName)) return true;
+    }
+    if (ts.isThrowStatement(parent)) return true;
+    // `err.code`, and the same through a cast or optional chain.
+    if (ts.isPropertyAccessExpression(parent) && SAFE_ERROR_PROPS.has(parent.name.text)) return true;
+    if (ts.isBinaryExpression(parent)) {
+      if (parent.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword) return true;
+      // `lastErr = err` — stored, not emitted.
+      if (parent.operatorToken.kind === ts.SyntaxKind.EqualsToken && parent.right === node) return true;
+    }
+    node = parent;
+  }
+  return false;
+}
+
+check('caught errors are redacted before they are printed or stored', () => {
+  /**
+   * Parsed, not pattern-matched.
+   *
+   * The first two versions of this were a list of regexes for shapes I had already seen,
+   * and they leaked in every direction: `console.log(err)` (only `console.error` was
+   * listed), `console.error('context:', err)` (the error had to be the sole argument),
+   * `${err}` bare template coercion, `err.stack`, `err.cause`, a catch bound to any name
+   * other than err/e/error, and anything wrapped across two lines. One of them even
+   * carried a `\1` backreference into a pattern with no capture groups, so it enforced
+   * nothing at all.
+   *
+   * Every one of those is closed by asking the compiler instead: find each `catch`
+   * binding, then find every reference to it, and require that each reference is either
+   * handed to a redactor, tested with `instanceof`, re-thrown, or stored in a variable.
+   * `typescript` is already a devDependency, so this costs no new install.
+   */
+  const offenders: string[] = [];
+  for (const file of walk('skills')) {
+    // The redactors themselves must handle the raw value — that is their job.
+    if (/lib[\\/](redact|cli)\.ts$/.test(file)) continue;
+    const text = fs.readFileSync(file, 'utf8');
+    const src = ts.createSourceFile(file, text, ts.ScriptTarget.ESNext, true);
+
+    const visitCatch = (clause: ts.CatchClause): void => {
+      const bound = clause.variableDeclaration?.name;
+      if (!bound || !ts.isIdentifier(bound)) return; // `catch { }` binds nothing
+      const name = bound.text;
+
+      const checkRef = (node: ts.Node): void => {
+        if (ts.isIdentifier(node) && node.text === name && node !== bound) {
+          if (!isSafeUse(node)) {
+            const { line } = src.getLineAndCharacterOfPosition(node.getStart(src));
+            offenders.push(
+              `${file}:${line + 1} — \`${name}\` reaches output unredacted` +
+                `\n        ${text.split('\n')[line].trim()}`,
+            );
+          }
+          return;
+        }
+        node.forEachChild(checkRef);
+      };
+      clause.block.forEachChild(checkRef);
+    };
+
+    const walkNode = (node: ts.Node): void => {
+      if (ts.isCatchClause(node)) visitCatch(node);
+      node.forEachChild(walkNode);
+    };
+    walkNode(src);
+  }
+  if (offenders.length) throw new Error(`unredacted provider text:\n    ${offenders.join('\n    ')}`);
+  return `every catch binding reaches output through ${[...ERROR_SINKS].join('/')}`;
 });
 
 check('no invented Codex quota rate', () => {
@@ -318,12 +552,11 @@ check('no invented Codex quota rate', () => {
   // paragraph wrapping "1% per 16 / searches" asserts exactly what one line would, and a
   // per-line check waves it through. Quoted spans are dropped first: citing the discredited
   // figure to warn against it is the opposite of asserting it, and the docs do exactly that.
-  const docs = [...walk('skills', '.md'), 'README.md', 'TESTING.md'];
-  const bad = docs.filter((f) =>
+  const bad = DOCS.filter((f) =>
     rate.test(fs.readFileSync(f, 'utf8').replace(/"[^"]*"/g, '').replace(/\s+/g, ' ')),
   );
   if (bad.length) throw new Error(`quota rate stated as fact in ${bad.join(', ')}`);
-  return `${docs.length} docs carry no invented per-search rate`;
+  return `${DOCS.length} docs carry no invented per-search rate`;
 });
 
 if (failures.length) {

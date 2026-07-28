@@ -22,6 +22,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Unit tests
+        run: npm test
+
       - name: Validate SKILL.md files
         run: npx tsx .github/scripts/validate-skills.ts .
 
@@ -125,3 +128,21 @@ jobs:
             [ -s "$CHECK/$f" ] || { echo "health check did not produce $f"; exit 1; }
           done
           echo "install verified: all three deliverables written"
+
+      # Only this job can prove the doctor loads and runs in the INSTALLED copy, where the
+      # scripts sit at the root rather than under skills/ — the other jobs run against the
+      # repo and structurally cannot see that. Redaction behaviour is covered by the unit
+      # tests instead: here nothing is configured, so no provider is called and no
+      # key-shaped text could exist to find.
+      - name: Provider doctor runs in the installed copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$DEST"
+          : > "$RUNNER_TEMP/empty.env"
+          # Exit 0 is the assertion: nothing configured means nothing failed.
+          LEADGEN_ENV="$RUNNER_TEMP/empty.env" npx tsx scripts/doctor/doctor.ts | tee "$RUNNER_TEMP/doctor.log"
+          # Tolerant of column widths — this asserts the outcome, not the formatting.
+          grep -qE '^SKIP +Firecrawl' "$RUNNER_TEMP/doctor.log" \
+            || { echo "doctor did not skip an unconfigured provider"; exit 1; }
+          echo "doctor runs in the installed copy"
