@@ -60,7 +60,10 @@ else calls `readEnv('zyteKey')`. A mistyped name must be a compile error, not a 
 rejects a hard-coded name anywhere else.
 
 **A caught error may never be printed or stored raw.** `scripts/lib/redact.ts` is the one
-redactor; stages exit through `reportFatal` and record failures through `brief`. A provider's
+redactor; stages exit through `reportFatal`, record failures through `brief`, and write
+ledgers through `appendLedger` — which redacts the error-bearing fields and nothing else,
+because a whole-record redact would elide the `sourceUrl` that is the proof beside an
+address. A provider's
 own 401 body can quote the key back — OpenAI's gives up the first eight and last four
 characters — and that text reaches three places at once: the console, the ledgers and
 failures CSV on disk, and the extraction agent's tool output, which sends it to the model.

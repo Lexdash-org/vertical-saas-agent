@@ -3,7 +3,7 @@ import pLimit from 'p-limit';
 import { PLACEHOLDER, ROLE, VENDOR } from '../lib/emails.js';
 import { normalizeWebsite, parseCsv, csvCell } from '../lib/site.js';
 import { EmailSources, fetchPage } from '../lib/scrape.js';
-import { MASTER_CSV, ledgerPath, loadEnv, readMaster, writeAtomic } from '../lib/paths.js';
+import { MASTER_CSV, appendLedger, ledgerPath, loadEnv, readMaster, writeAtomic } from '../lib/paths.js';
 import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
 import { brief } from '../lib/redact.js';
 
@@ -223,7 +223,7 @@ async function scrape(): Promise<void> {
     pending.map((t) =>
       limit(async () => {
         const r = await harvest(t);
-        fs.appendFileSync(REL_LEDGER, JSON.stringify(r) + '\n');
+        appendLedger(REL_LEDGER, r);
         done2 += 1;
         if (r.ownEmails.length) ownHits += 1;
         if (r.relatedEmails.length) relHits += 1;

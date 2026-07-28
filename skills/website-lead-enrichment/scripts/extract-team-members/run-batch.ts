@@ -12,7 +12,7 @@ import type { SiteRankRecord } from '../lib/site.js';
 import { buildTeamExtractor, lunaClient, organizePeople } from './agent.js';
 import { extractPeopleFromPage, fetchPage, type Person } from '../lib/scrape.js';
 import { extractionModel } from '../lib/llm.js';
-import { COMPANIES_DIR, MASTER_CSV, ledgerPath, loadEnv, workPath, writeAtomic } from '../lib/paths.js';
+import { COMPANIES_DIR, MASTER_CSV, appendLedger, ledgerPath, loadEnv, workPath, writeAtomic } from '../lib/paths.js';
 import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
 import { brief } from '../lib/redact.js';
 
@@ -497,18 +497,15 @@ async function main(): Promise<void> {
         } else {
           failedCount += 1;
         }
-        fs.appendFileSync(
-          LEDGER,
-          JSON.stringify({
-            domain: o.domain,
-            company: o.company,
-            people: o.people.length,
-            visits: o.visits,
-            ms: o.ms,
-            ...(o.error ? { error: o.error } : {}),
-            finishedAt: new Date().toISOString(),
-          }) + '\n',
-        );
+        appendLedger(LEDGER, {
+          domain: o.domain,
+          company: o.company,
+          people: o.people.length,
+          visits: o.visits,
+          ms: o.ms,
+          ...(o.error ? { error: o.error } : {}),
+          finishedAt: new Date().toISOString(),
+        });
         console.log(
           `  progress ${completed}/${pending.length} · master ${master.size} people (+${added}/~${updated}) · ${failedCount} failed`,
         );

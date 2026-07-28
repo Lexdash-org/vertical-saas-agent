@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../lib/site.js';
-import { MASTER_CSV, ensureDirs, ledgerPath, workPath } from '../lib/paths.js';
+import { MASTER_CSV, appendLedger, ensureDirs, ledgerPath, workPath } from '../lib/paths.js';
 import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
 import { resolveEmailDomain } from './mxEmailDomain.js';
 
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
           hasMx: r.hasMx === true,
           mx: (r.mx ?? []).slice(0, 3).join(' | '),
         };
-        fs.appendFileSync(CACHE, JSON.stringify(rec) + '\n');
+        appendLedger(CACHE, rec);
         cache.set(t.key, rec);
         done += 1;
         if (done % 200 === 0) console.log(`  resolved ${done}/${pending.length}`);

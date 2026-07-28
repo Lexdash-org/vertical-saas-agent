@@ -4,7 +4,7 @@ import pLimit from 'p-limit';
 import { csvCell, isSiteReachable, normalizeWebsite, parseCsv, type SiteRankRecord, type SiteTarget } from '../lib/site.js';
 import { findTeamPages } from './teamPages.js';
 import { clientsFromEnv } from '../lib/llm.js';
-import { ledgerPath, loadEnv, workPath } from '../lib/paths.js';
+import { appendLedger, ledgerPath, loadEnv, workPath } from '../lib/paths.js';
 import { argVal, hasFlag, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
 import { brief } from '../lib/redact.js';
 
@@ -167,7 +167,7 @@ async function main(): Promise<void> {
           console.error(`✗ ${target.key} — ${rec.error}${rec.siteDown ? ' [host unreachable — will be skipped]' : ''}`);
         }
         rec.finishedAt = new Date().toISOString();
-        fs.appendFileSync(JSONL, JSON.stringify(rec) + '\n');
+        appendLedger(JSONL, rec);
         done.set(target.key, rec);
       }),
     ),

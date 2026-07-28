@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ENV, loadConfig } from './env.js';
 import { die } from './cli.js';
+import { redact } from './redact.js';
 import { parseCsv } from './site.js';
 
 /**
@@ -117,6 +118,36 @@ export function writeAtomic(file: string, body: string): void {
   const tmp = `${file}.tmp`;
   fs.writeFileSync(tmp, body);
   fs.renameSync(tmp, file);
+}
+
+/**
+ * Fields whose value is a caught error rendered as text, and therefore the provider's own
+ * words. Everything else in a ledger record is ours: domains, names, counts, timestamps.
+ */
+const ERROR_FIELDS = new Set(['error', 'message']);
+
+/**
+ * Append one record to a ledger, redacting the fields that carry provider text.
+ *
+ * The single writer for every ledger in the pipeline. It exists because the console got a
+ * choke point (`reportFatal`) while the disk sink had nothing but the discipline of
+ * remembering `brief()` at each of eight hand-rolled
+ * `appendFileSync(file, JSON.stringify(rec) + '\n')` calls across seven stages — and a
+ * credential written to a ledger outlives the terminal it would have scrolled off.
+ *
+ * **Only the named fields are redacted, never the whole line.** A ledger record carries
+ * `sourceUrl`, which is the evidence that ships beside an address and the thing this
+ * project refuses to publish a contact without. `redact` elides long opaque URL path
+ * segments — that is the point of it, since a gateway can hide a key there — so running it
+ * over a serialised record would turn `/our-team/dr-jane-smith-cardiologist` into
+ * `<redacted>` and destroy the proof. Company names are at risk too: `GSK-…` matches the
+ * key-prefix rule. Precision here is what makes the choke point safe to apply everywhere.
+ */
+export function appendLedger(file: string, record: unknown): void {
+  const line = JSON.stringify(record, (key, value) =>
+    typeof value === 'string' && ERROR_FIELDS.has(key) ? redact(value) : (value as unknown),
+  );
+  fs.appendFileSync(file, `${line}\n`);
 }
 
 /**

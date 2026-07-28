@@ -3,7 +3,7 @@ import pLimit from 'p-limit';
 import { FREEMAIL, PLACEHOLDER, ROLE, VENDOR } from '../lib/emails.js';
 import { normalizeWebsite, parseCsv, csvCell } from '../lib/site.js';
 import { fetchPage } from '../lib/scrape.js';
-import { MASTER_CSV, ledgerPath, loadEnv, readMaster, writeAtomic } from '../lib/paths.js';
+import { MASTER_CSV, appendLedger, ledgerPath, loadEnv, readMaster, writeAtomic } from '../lib/paths.js';
 import { argVal, reportFatal, requireColumn, requireInput } from '../lib/cli.js';
 import { brief } from '../lib/redact.js';
 
@@ -201,7 +201,7 @@ async function render(): Promise<void> {
     pending.map((t) =>
       limit(async () => {
         const h = await harvest(t);
-        fs.appendFileSync(RENDER_LEDGER, JSON.stringify(h) + '\n');
+        appendLedger(RENDER_LEDGER, h);
         done2 += 1;
         if (h.businessEmails.length) recovered += 1;
         if (h.businessEmails.length || done2 % 25 === 0) {

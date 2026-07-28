@@ -406,6 +406,30 @@ check('every re-derived install path agrees', () => {
 });
 
 /**
+ * One writer for the ledgers, so the disk sink is safe by construction.
+ *
+ * Eight stages hand-rolled `appendFileSync(file, JSON.stringify(rec) + '\n')`, and every
+ * one of them relied on a person remembering `brief()` at the point the error was assigned.
+ * The console has had a choke point since `reportFatal`; this is the same guarantee for the
+ * sink that actually persists — a credential in a ledger outlives the terminal it would
+ * have scrolled off.
+ */
+check('ledgers are written through one function', () => {
+  const home = `lib${path.sep}paths.ts`;
+  const offenders = walk('skills')
+    .filter((f) => !f.endsWith(home))
+    .flatMap((f) =>
+      fs.readFileSync(f, 'utf8').split('\n')
+        .map((line, i) => (/\bappendFileSync\s*\(/.test(line) ? `${f}:${i + 1} → ${line.trim()}` : ''))
+        .filter(Boolean),
+    );
+  if (offenders.length) {
+    throw new Error(`append through appendLedger() in paths.ts instead:\n    ${offenders.join('\n    ')}`);
+  }
+  return 'appendLedger is the only append';
+});
+
+/**
  * Every credential in `ENV` must be listed in `SECRET_KEYS`, or `redact` stops covering it.
  *
  * `SECRET_KEYS` sits next to `ENV` so the two are read together, but proximity is not

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import pLimit from 'p-limit';
 import { csvCell, normalizeWebsite, parseCsv } from '../lib/site.js';
-import { MASTER_CSV, ledgerPath, loadEnv, readMaster, workPath, writeAtomic } from '../lib/paths.js';
+import { MASTER_CSV, appendLedger, ledgerPath, loadEnv, readMaster, workPath, writeAtomic } from '../lib/paths.js';
 import { argVal, die, reportFatal, requireInput } from '../lib/cli.js';
 import { resolveCodex } from '../lib/codex.js';
 import { readEnv } from '../lib/env.js';
@@ -343,7 +343,7 @@ async function main(): Promise<void> {
         try {
           const res = await codexSearch(t.rowId, buildPrompt(t));
           const h: Hit = { rowId: t.rowId, domain: t.domain, name: t.name, ...res };
-          fs.appendFileSync(LEDGER, JSON.stringify(h) + '\n');
+          appendLedger(LEDGER, h);
           done2++;
           if (usable(h)) { hits++; console.log(`  ✓ ${t.name} -> ${h.email} [${h.confidence}] ${h.source_url}`); }
           else if (done2 % 20 === 0) console.log(`  ${done2}/${batch.length} · ${t.name} -> ${h.identity_match}/${h.confidence}`);
@@ -361,7 +361,7 @@ async function main(): Promise<void> {
             if (!stopped) { stopped = true; console.error(`\n⏸ RATE LIMIT reached — stopping cleanly. ${done2} done this pass, ${hits} found. Re-run later to resume.\n   signal: ${brief(err)}`); }
             return;
           }
-          fs.appendFileSync(LEDGER, JSON.stringify({ rowId: t.rowId, domain: t.domain, name: t.name, error: brief(err, 120) }) + '\n');
+          appendLedger(LEDGER, { rowId: t.rowId, domain: t.domain, name: t.name, error: brief(err, 120) });
           done2++;
         }
       }),
