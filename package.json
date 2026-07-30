@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Vertical-SaaS lead-gen agent: company websites -> team members + emails (scrape, harvest, Codex web-discovery, MX + pattern-learning + permutation).",
+  "description": "Finds staff names and email addresses for the vertical-market accounts no data vendor covers - by reading the companies' own websites.",
   "keywords": [
     "lead-generation",
     "email-finder",

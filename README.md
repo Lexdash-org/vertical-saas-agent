@@ -1,7 +1,8 @@
 # Website Lead Enrichment
 
-Turn a list of company websites into the **people who work there and their email
-addresses** — for contacts that exist in no data vendor, only on the companies' own sites.
+Your accounts aren't in Apollo, ZoomInfo, or Clay — vertical markets never are. But their
+staff are named on their own websites. Give this a list of company URLs and it returns
+**the people and their email addresses**.
 
 Validated on 1,097 Australian medical clinics, which produced 9,122 people.
 
