@@ -4,7 +4,9 @@ Your accounts aren't in Apollo, ZoomInfo, or Clay — vertical markets never are
 staff are named on their own websites. Give this a list of company URLs and it returns
 **the people and their email addresses**.
 
-Validated on 1,097 Australian medical clinics, which produced 9,122 people.
+Validated on 1,097 Australian medical clinics, which produced 9,122 people. That input list
+is in this repo — [`examples/input/australian-private-clinics.csv`](examples/input/australian-private-clinics.csv)
+— so you can run the same list and compare.
 
 [![skills.sh](https://skills.sh/b/Lexdash-org/vertical-saas-agent)](https://skills.sh/Lexdash-org/vertical-saas-agent)
 
@@ -34,6 +36,10 @@ Give your agent a CSV with a website column and ask in plain language:
 
 > Enrich this list of clinic websites — I need staff names and email addresses.
 > `examples/input/companies.example.csv`
+
+Two inputs ship with the repo: `companies.example.csv` to try it in a minute, and
+`australian-private-clinics.csv` — the real 1,097-clinic list above — to reproduce the
+validation run.
 
 You never type a command; the agent runs the pipeline and reports back. You get three files:
 
